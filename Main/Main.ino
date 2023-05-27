@@ -30,10 +30,10 @@ bool btn1_pressed = false;
 void setup() {
   //Sets baud rate
   Serial.begin(115200);
-  /*
+  
   Serial_NewLine();
   Init_DHT();
-  */
+  
   Serial_NewLine();
   Init_SM();
 
@@ -41,10 +41,10 @@ void setup() {
 }
 //-----------------------------------------------------------------------------------------------------
 void loop() {
-  /*
+  
   Serial_NewLine();
   Read_DHT();
-  */
+  
   Serial_NewLine();
   Read_SM();
 
@@ -69,6 +69,7 @@ void loop() {
   //with only one press as it bounces on the contact of the breadboard
   delay(50);
   */
+
   delay(5000);
 }
 //-----------------------------------------------------------------------------------------------------
@@ -171,14 +172,14 @@ void Read_SM(){
   {
     float sm = Adjust_SM(analogRead(sm_array[i]));
     total_sm += sm;
-    /*
+    
     if(!isnan(sm)){
       total_sm += sm;
     }
     else{
       adjusted_sm_array_size--;
     }
-    */
+    
     
     Serial.print(i + 1);
     Serial.print(", ");
