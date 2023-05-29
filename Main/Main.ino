@@ -15,10 +15,10 @@ int dht_array_size;
 //Defines soil moisture sensor pins
 #define SM1_PIN 35
 #define SM2_PIN 34
-int sm_array[] = {SM1_PIN};//, SM2_PIN};
+int sm_array[] = {SM1_PIN, SM2_PIN};
 int sm_array_size;
 
-unsigned long sensor_delay = 9500;
+unsigned long sensor_delay = 4500;
 unsigned long sensor_last_time = 0;
 
 //
@@ -155,16 +155,15 @@ void Init_DHT(){
   Serial.print("Amount of dht sensors: ");
   dht_array_size = sizeof(dht_array)/sizeof(DHT);
   Serial.print(dht_array_size);
-  Serial.print("\n");
 
   //Initializes all dht sensors in the dht array
   for(int i = 0; i < dht_array_size; i++)
   {
     dht_array[i].begin();
+    Serial.print("\n");
     Serial.print("DHT sensor ");
     Serial.print(i + 1);
     Serial.print(" initialized successfully!");
-    Serial.print("\n");
   }
 }
 //-----------------------------------------------------------------------------------------------------
@@ -208,12 +207,12 @@ void Read_DHT(){
   float average_h = total_h/adjusted_dht_array_size;
   float average_t = total_t/adjusted_dht_array_size;
 
-  Write_LCD(0, 0, "H: ");
+  Write_LCD(0, 0, "H:");
   Write_LCD(2, 0, "%");
   Write_LCD(3, 0, String(average_h, 0));
   
 
-  Write_LCD(0, 1, "T: ");
+  Write_LCD(0, 1, "T:");
   Write_LCD(2, 1, "C");
   Write_LCD(3, 1, String(average_t, 0));
   
@@ -233,7 +232,6 @@ void Init_SM(){
   Serial.print("Amount of soil moisture sensors: ");
   sm_array_size = sizeof(sm_array)/sizeof(int);
   Serial.print(sm_array_size);
-  Serial.print("\n");
 }
 //-----------------------------------------------------------------------------------------------------
 void Read_SM(){
@@ -252,7 +250,6 @@ void Read_SM(){
   for(int i = 0; i < sm_array_size; i++)
   {
     float sm = Adjust_SM(analogRead(sm_array[i]));
-    total_sm += sm;
     
     if(!isnan(sm)){
       total_sm += sm;
@@ -271,6 +268,10 @@ void Read_SM(){
 
   //Calculates average values of the read sensor data (of one cycle)
   float average_sm = total_sm/adjusted_sm_array_size;
+
+  Write_LCD(7, 0, "S:");
+  Write_LCD(9, 0, "%");
+  Write_LCD(10, 0, String(average_sm, 0));
 
   Serial.print("A, ");
   Serial.print("Soil moisture: ");
