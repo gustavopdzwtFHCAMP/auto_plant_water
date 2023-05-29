@@ -18,27 +18,31 @@ int dht_array_size;
 int sm_array[] = {SM1_PIN, SM2_PIN};
 int sm_array_size;
 
+//The interval in which the sensors should be read and displayed
 unsigned long sensor_delay = 4500;
 unsigned long sensor_last_time = 0;
 
-//
+//Alarm
 #define ALM_PIN 33
 
 //LCD I2C
 #include <Wire.h>
 #include <LiquidCrystal_I2C.h>
 
-// set the LCD number of columns and rows
+//Sets the LCD number of columns and rows
 int lcdColumns = 16;
 int lcdRows = 2;
 
-// set LCD address, number of columns and rows
-// if you don't know your display address, run an I2C scanner sketch
+//Sets LCD address, number of columns and rows
 LiquidCrystal_I2C lcd(0x3F, lcdColumns, lcdRows);
 
 //Mode variables
 enum Mode { outdoor, indoor, manual };
 Mode current_mode = manual;
+
+//The interval in which the mode display should be refreshed
+unsigned long mode_delay = 500;
+unsigned long mode_last_time = 0;
 
 //Defines button pins
 #define BTN1_PIN 5
@@ -121,10 +125,7 @@ void setup() {
   
   Init_ALM();
 
-  Serial_NewLine();
-  Read_DHT();
-  Serial_NewLine();
-  Read_SM();
+  sensor_last_time = -(sensor_delay + 1);
 }
 //-----------------------------------------------------------------------------------------------------
 void loop() {
@@ -135,13 +136,17 @@ void loop() {
     Read_DHT();
     Serial_NewLine();
     Read_SM();
+    Serial_NewLine();
+    Read_WL();
 
     sensor_last_time = millis();
   }
 
-  Print_Mode();
-  
-  delay(500);
+  if((millis() - mode_last_time) > mode_delay){
+    Print_Mode();
+    
+    mode_last_time = millis();
+  }
 }
 //-----------------------------------------------------------------------------------------------------
 void Serial_NewLine(){
@@ -206,16 +211,18 @@ void Read_DHT(){
   //Calculates average values of the read sensor data (of one cycle)
   float average_h = total_h/adjusted_dht_array_size;
   float average_t = total_t/adjusted_dht_array_size;
+  //average_h = 100;
+  //average_t = 100;
 
-  Write_LCD(0, 0, "H:");
-  Write_LCD(2, 0, "%");
-  Write_LCD(3, 0, String(average_h, 0));
-  
+  Write_LCD(0, 0, "H%");
+  Write_LCD(2, 0, "   ");
+  Write_LCD(2, 0, String(average_h, 0));
 
-  Write_LCD(0, 1, "T:");
-  Write_LCD(2, 1, "C");
-  Write_LCD(3, 1, String(average_t, 0));
-  
+  Write_LCD(0, 1, "T");
+  //Write_LCD(2, 1, "C");
+  Write_LCD(1, 1, String(char(223)));
+  Write_LCD(2, 1, "   ");
+  Write_LCD(2, 1, String(average_t, 0));
 
   Serial.print("A, ");
   Serial.print("Humidity: ");
@@ -268,10 +275,11 @@ void Read_SM(){
 
   //Calculates average values of the read sensor data (of one cycle)
   float average_sm = total_sm/adjusted_sm_array_size;
+  //average_sm = 100;
 
-  Write_LCD(7, 0, "S:");
-  Write_LCD(9, 0, "%");
-  Write_LCD(10, 0, String(average_sm, 0));
+  Write_LCD(6, 0, "S%");
+  Write_LCD(8, 0, "   ");
+  Write_LCD(8, 0, String(average_sm, 0));
 
   Serial.print("A, ");
   Serial.print("Soil moisture: ");
@@ -374,18 +382,18 @@ void Change_Mode(){
 }
 //-----------------------------------------------------------------------------------------------------
 void Print_Mode(){
-  int x = 13;
+  int x = 14;
   int y = 1;
 
   switch(current_mode){
     case outdoor:
-      Write_LCD(x, y, "OUT");
+      Write_LCD(x, y, "OD");
     break;
     case indoor:
-      Write_LCD(x, y, "IN ");
+      Write_LCD(x, y, "ID");
     break;
     case manual:
-      Write_LCD(x, y, "MAN");
+      Write_LCD(x, y, "MN");
     break;
   }
 }
@@ -396,4 +404,16 @@ void Init_ALM(){
 //-----------------------------------------------------------------------------------------------------
 void Change_Alarm(bool set){
   digitalWrite(ALM_PIN, set); //turn buzzer on
+}
+
+void Read_WL(){
+  int water_level = 0;
+
+  Write_LCD(6, 1, "L%");
+  Write_LCD(8, 1, "   ");
+  Write_LCD(8, 1, String(water_level));
+
+  Serial.print("Water level: ");
+  Serial.print(water_level);
+  Serial.print(" %");
 }
