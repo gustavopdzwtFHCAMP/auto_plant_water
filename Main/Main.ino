@@ -1,11 +1,10 @@
 //-----------------------------------------------------------------------------------------------------
-//#include "DHT.h"
 #include <DHT.h>
 #define DHTTYPE DHT11
 
 //Defines dht sensor pins
-#define DHT1_PIN 27
-#define DHT2_PIN 26
+#define DHT1_PIN 26
+#define DHT2_PIN 25
 //Declares dht sensors
 //DHT dht(DHTPIN, DHTTYPE);
 DHT dht1(DHT1_PIN, DHT11);
@@ -14,11 +13,16 @@ DHT dht_array[] = {dht1, dht2};
 int dht_array_size;
 
 //Defines soil moisture sensor pins
-#define SM1_PIN 33
-#define SM2_PIN 32
-#define SM3_PIN 35
-int sm_array[] = {SM1_PIN};//, SM2_PIN, SM3_PIN};
+#define SM1_PIN 35
+#define SM2_PIN 34
+int sm_array[] = {SM1_PIN, SM2_PIN};
 int sm_array_size;
+
+unsigned long sensor_delay = 4500;
+unsigned long sensor_last_time = 0;
+
+//
+#define ALM_PIN 33
 
 //LCD I2C
 #include <Wire.h>
@@ -30,45 +34,72 @@ int lcdRows = 2;
 
 // set LCD address, number of columns and rows
 // if you don't know your display address, run an I2C scanner sketch
-LiquidCrystal_I2C LCD(0x3F, lcdColumns, lcdRows);
+LiquidCrystal_I2C lcd(0x3F, lcdColumns, lcdRows);
 
 //Mode variables
 enum Mode { outdoor, indoor, manual };
 Mode current_mode = manual;
 
 //Defines button pins
-#define BTN1_PIN 16
-//#define BTN2_PIN 17
-//#define BTN3_PIN 5
+#define BTN1_PIN 5
+#define BTN2_PIN 14
+#define BTN3_PIN 27
 //For the buttons it does not make sense to create an array, as each button has to
 //have a separate isr assigned, as isr's dont take parameters
 
-//For every button added, the following variables and functions (isr) have to be declared:
+//Debounce times
+unsigned long btn1_debounce_delay = 5;
+unsigned long btn2_debounce_delay = 250;
+unsigned long btn3_debounce_delay = 250;
+
+//For every button added, the following variables and functions (isr) have to be declared (dependent on type of interrupt):
 bool btn1_pressed = false;
-unsigned long btn1_lastDebounceTime = 0;  //The last time the output pin was toggled
-unsigned long btn1_debounceDelay = 25;    //The debounce time; increase if the output flickers
+unsigned long btn1_last_debounce_time = 0;  //The last time the output pin was toggled
+unsigned long btn2_last_debounce_time = 0;  //The last time the output pin was toggled
+unsigned long btn3_last_debounce_time = 0;  //The last time the output pin was toggled
 
 void IRAM_ATTR Action_BTN1(){
-  if ((millis() - btn1_lastDebounceTime) > btn1_debounceDelay) {
+  if((millis() - btn1_last_debounce_time) > btn1_debounce_delay){
     if(btn1_pressed == false){
       if(digitalRead(BTN1_PIN) == HIGH){
         btn1_pressed = true;
-        Serial.print("\n");
         Serial_NewLine();
         Serial.print("Button 1 pressed");
-        //Change_Mode();
-        //Print_Mode();
+        Change_Alarm(1);
       }
     }
     else if(btn1_pressed == true){
       if(digitalRead(BTN1_PIN) == LOW){
         btn1_pressed = false;
-        Serial.print("\n");
         Serial_NewLine();
         Serial.print("Button 1 released");
+        Change_Alarm(0);
       }
     }
-    btn1_lastDebounceTime = millis();
+    btn1_last_debounce_time = millis();
+  }
+}
+
+void IRAM_ATTR Action_BTN2(){
+  if((millis() - btn2_last_debounce_time) > btn2_debounce_delay){
+    if(digitalRead(BTN2_PIN) == HIGH){
+      Serial_NewLine();
+      //Serial.print("\n");
+      Serial.print("Button 2 pressed");
+      Change_Mode();
+    }
+    btn2_last_debounce_time = millis();
+  }
+}
+
+void IRAM_ATTR Action_BTN3(){
+  if((millis() - btn3_last_debounce_time) > btn3_debounce_delay){
+    if(digitalRead(BTN3_PIN) == HIGH){
+      Serial_NewLine();
+      //Serial.print("\n");
+      Serial.print("Button 3 pressed");
+    }
+    btn3_last_debounce_time = millis();
   }
 }
 //-----------------------------------------------------------------------------------------------------
@@ -78,30 +109,43 @@ void setup() {
   //Sets baud rate
   Serial.begin(115200);
   
-  //Serial_NewLine();
-  //Init_DHT();
+  Serial_NewLine();
+  Init_DHT();
   
-  //Serial_NewLine();
-  //Init_SM();
+  Serial_NewLine();
+  Init_SM();
 
   Init_BTN();
 
   Init_LCD();
+  
+  Init_ALM();
+
+  Serial_NewLine();
+  Read_DHT();
+  Serial_NewLine();
+  Read_SM();
 }
 //-----------------------------------------------------------------------------------------------------
 void loop() {
-  //Serial_NewLine();
-  //Read_DHT();
-  
-  //Serial_NewLine();
-  //Read_SM();
-
   //Find_LCD_ADR();
 
-  //delay(5000);
+  if((millis() - sensor_last_time) > sensor_delay){
+    Serial_NewLine();
+    Read_DHT();
+    Serial_NewLine();
+    Read_SM();
+
+    sensor_last_time = millis();
+  }
+
+  Print_Mode();
+  
+  delay(500);
 }
 //-----------------------------------------------------------------------------------------------------
 void Serial_NewLine(){
+  Serial.print("\n");
   Serial.print("+---------------------------+");
   Serial.print("\n");
 }
@@ -111,16 +155,15 @@ void Init_DHT(){
   Serial.print("Amount of dht sensors: ");
   dht_array_size = sizeof(dht_array)/sizeof(DHT);
   Serial.print(dht_array_size);
-  Serial.print("\n");
 
   //Initializes all dht sensors in the dht array
   for(int i = 0; i < dht_array_size; i++)
   {
     dht_array[i].begin();
+    Serial.print("\n");
     Serial.print("DHT sensor ");
     Serial.print(i + 1);
     Serial.print(" initialized successfully!");
-    Serial.print("\n");
   }
 }
 //-----------------------------------------------------------------------------------------------------
@@ -164,12 +207,12 @@ void Read_DHT(){
   float average_h = total_h/adjusted_dht_array_size;
   float average_t = total_t/adjusted_dht_array_size;
 
-  Write_LCD(0, 0, "H: ");
+  Write_LCD(0, 0, "H:");
   Write_LCD(2, 0, "%");
   Write_LCD(3, 0, String(average_h, 0));
   
 
-  Write_LCD(0, 1, "T: ");
+  Write_LCD(0, 1, "T:");
   Write_LCD(2, 1, "C");
   Write_LCD(3, 1, String(average_t, 0));
   
@@ -182,7 +225,6 @@ void Read_DHT(){
   Serial.print("Temperature: ");
   Serial.print(average_t);
   Serial.print(" °C");
-  Serial.print("\n");
 }
 //-----------------------------------------------------------------------------------------------------
 void Init_SM(){
@@ -190,7 +232,6 @@ void Init_SM(){
   Serial.print("Amount of soil moisture sensors: ");
   sm_array_size = sizeof(sm_array)/sizeof(int);
   Serial.print(sm_array_size);
-  Serial.print("\n");
 }
 //-----------------------------------------------------------------------------------------------------
 void Read_SM(){
@@ -209,7 +250,6 @@ void Read_SM(){
   for(int i = 0; i < sm_array_size; i++)
   {
     float sm = Adjust_SM(analogRead(sm_array[i]));
-    total_sm += sm;
     
     if(!isnan(sm)){
       total_sm += sm;
@@ -229,11 +269,14 @@ void Read_SM(){
   //Calculates average values of the read sensor data (of one cycle)
   float average_sm = total_sm/adjusted_sm_array_size;
 
+  Write_LCD(7, 0, "S:");
+  Write_LCD(9, 0, "%");
+  Write_LCD(10, 0, String(average_sm, 0));
+
   Serial.print("A, ");
   Serial.print("Soil moisture: ");
   Serial.print(average_sm);
   Serial.print(" %");
-  Serial.print("\n");
 }
 //-----------------------------------------------------------------------------------------------------
 float Adjust_SM(float data){ 
@@ -260,6 +303,8 @@ float Adjust_SM(float data){
 //-----------------------------------------------------------------------------------------------------
 void Init_BTN(){
   attachInterrupt(BTN1_PIN, Action_BTN1, CHANGE);
+  attachInterrupt(BTN2_PIN, Action_BTN2, RISING);
+  attachInterrupt(BTN3_PIN, Action_BTN3, RISING);
 }
 //-----------------------------------------------------------------------------------------------------
 void Find_LCD_ADR(){
@@ -296,42 +341,48 @@ void Find_LCD_ADR(){
 //-----------------------------------------------------------------------------------------------------
 void Init_LCD(){
   //Initializes LCD
-  LCD.init();
+  lcd.init();
   //Turns on LCD backlight                      
-  LCD.backlight();
+  lcd.backlight();
 }
 //-----------------------------------------------------------------------------------------------------
 void Write_LCD(int x, int y, String message){
+  //LCD.clear();
   //Set cursor to x column, y row
-  LCD.setCursor(x, y);
+  lcd.setCursor(x, y);
   //Print message on display
-  LCD.print(message);
+  lcd.print(message);
 }
 //-----------------------------------------------------------------------------------------------------
 void Change_Mode(){
+  Serial_NewLine();
+  //Serial.print("\n");
   switch(current_mode){
     case outdoor:
       current_mode = indoor;
+      Serial.print("Switched mode to indoor");
     break;
     case indoor:
       current_mode = manual;
+      Serial.print("Switched mode to manual");
     break;
     case manual:
       current_mode = outdoor;
-    break;
+      Serial.print("Switched mode to outdoor");
+    break; 
   }
 }
 //-----------------------------------------------------------------------------------------------------
 void Print_Mode(){
-  int x = 0;
-  int y = 0;
+  int x = 13;
+  int y = 1;
 
   switch(current_mode){
     case outdoor:
       Write_LCD(x, y, "OUT");
     break;
     case indoor:
-      Write_LCD(x, y, "IN");
+      Write_LCD(x, y, "IN ");
     break;
     case manual:
       Write_LCD(x, y, "MAN");
@@ -339,3 +390,10 @@ void Print_Mode(){
   }
 }
 //-----------------------------------------------------------------------------------------------------
+void Init_ALM(){
+  pinMode(ALM_PIN, OUTPUT);
+}
+//-----------------------------------------------------------------------------------------------------
+void Change_Alarm(bool set){
+  digitalWrite(ALM_PIN, set); //turn buzzer on
+}
