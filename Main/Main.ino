@@ -42,17 +42,21 @@ Mode current_mode = manual;
 
 //Defines button pins
 #define BTN1_PIN 5
-#define BTN2_PIN 27
+#define BTN2_PIN 14
+#define BTN3_PIN 27
 //For the buttons it does not make sense to create an array, as each button has to
 //have a separate isr assigned, as isr's dont take parameters
 
-unsigned long btn1_debounce_delay = 5;    //The debounce time
-unsigned long btn2_debounce_delay = 250;    //The debounce time
+//Debounce times
+unsigned long btn1_debounce_delay = 5;
+unsigned long btn2_debounce_delay = 250;
+unsigned long btn3_debounce_delay = 250;
 
-//For every button added, the following variables and functions (isr) have to be declared:
+//For every button added, the following variables and functions (isr) have to be declared (dependent on type of interrupt):
 bool btn1_pressed = false;
 unsigned long btn1_last_debounce_time = 0;  //The last time the output pin was toggled
 unsigned long btn2_last_debounce_time = 0;  //The last time the output pin was toggled
+unsigned long btn3_last_debounce_time = 0;  //The last time the output pin was toggled
 
 void IRAM_ATTR Action_BTN1(){
   if((millis() - btn1_last_debounce_time) > btn1_debounce_delay){
@@ -87,6 +91,17 @@ void IRAM_ATTR Action_BTN2(){
     btn2_last_debounce_time = millis();
   }
 }
+
+void IRAM_ATTR Action_BTN3(){
+  if((millis() - btn3_last_debounce_time) > btn3_debounce_delay){
+    if(digitalRead(BTN3_PIN) == HIGH){
+      Serial_NewLine();
+      //Serial.print("\n");
+      Serial.print("Button 3 pressed");
+    }
+    btn3_last_debounce_time = millis();
+  }
+}
 //-----------------------------------------------------------------------------------------------------
 void setup() {
   //Wire.begin();
@@ -105,6 +120,11 @@ void setup() {
   Init_LCD();
   
   Init_ALM();
+
+  Serial_NewLine();
+  Read_DHT();
+  Serial_NewLine();
+  Read_SM();
 }
 //-----------------------------------------------------------------------------------------------------
 void loop() {
@@ -113,7 +133,6 @@ void loop() {
   if((millis() - sensor_last_time) > sensor_delay){
     Serial_NewLine();
     Read_DHT();
-
     Serial_NewLine();
     Read_SM();
 
@@ -284,6 +303,7 @@ float Adjust_SM(float data){
 void Init_BTN(){
   attachInterrupt(BTN1_PIN, Action_BTN1, CHANGE);
   attachInterrupt(BTN2_PIN, Action_BTN2, RISING);
+  attachInterrupt(BTN3_PIN, Action_BTN3, RISING);
 }
 //-----------------------------------------------------------------------------------------------------
 void Find_LCD_ADR(){
