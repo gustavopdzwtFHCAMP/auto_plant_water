@@ -19,7 +19,7 @@ int sm_array[] = {SM1_PIN, SM2_PIN};
 int sm_array_size;
 
 //The interval in which the sensors should be read and displayed
-unsigned long sensor_delay = 4500;
+unsigned long sensor_delay = 5000;
 unsigned long sensor_last_time = 0;
 
 //Alarm
@@ -164,6 +164,7 @@ void Init_DHT(){
   //Initializes all dht sensors in the dht array
   for(int i = 0; i < dht_array_size; i++)
   {
+    //pinMode(dht_array[i], INPUT);
     dht_array[i].begin();
     Serial.print("\n");
     Serial.print("DHT sensor ");
@@ -239,6 +240,11 @@ void Init_SM(){
   Serial.print("Amount of soil moisture sensors: ");
   sm_array_size = sizeof(sm_array)/sizeof(int);
   Serial.print(sm_array_size);
+
+  for(int i = 0; i < sm_array_size; i++)
+  {
+    pinMode(sm_array[i], INPUT);
+  }
 }
 //-----------------------------------------------------------------------------------------------------
 void Read_SM(){
@@ -287,7 +293,8 @@ void Read_SM(){
   Serial.print(" %");
 }
 //-----------------------------------------------------------------------------------------------------
-float Adjust_SM(float data){ 
+float Adjust_SM(float data){
+  /*
   //When completely dry, the sensor returns 4095
   data = abs(data - 4095);
 
@@ -306,7 +313,10 @@ float Adjust_SM(float data){
   }
   
   data = (data/clamp_value)*100;
-  return data;  
+  return data;
+  */
+  
+  return ( 100 - ( ( data / 4095 ) * 100 ) );
 }
 //-----------------------------------------------------------------------------------------------------
 void Init_BTN(){
