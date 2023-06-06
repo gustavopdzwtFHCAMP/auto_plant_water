@@ -1,7 +1,7 @@
 //-----------------------------------------------------------------------------------------------------
+//++++++++++++++++++++++++++++++++++++
 #include <DHT.h>
 #define DHTTYPE DHT11
-
 //Defines dht sensor pins
 #define DHT1_PIN 26
 #define DHT2_PIN 25
@@ -11,57 +11,61 @@ DHT dht1(DHT1_PIN, DHT11);
 DHT dht2(DHT2_PIN, DHT11);
 DHT dht_array[] = {dht1, dht2};
 int dht_array_size;
-
+//++++++++++++++++++++++++++++++++++++
 //Defines soil moisture sensor pins
 #define SM1_PIN 35
 #define SM2_PIN 34
 int sm_array[] = {SM1_PIN, SM2_PIN};
 int sm_array_size;
-
+//++++++++++++++++++++++++++++++++++++
 //The interval in which the sensors should be read and displayed
 unsigned long sensor_delay = 5000;
 unsigned long sensor_last_time = 0;
-
+//++++++++++++++++++++++++++++++++++++
 //Alarm
 #define ALM_PIN 33
-
+//++++++++++++++++++++++++++++++++++++
 //LCD I2C
 #include <Wire.h>
 #include <LiquidCrystal_I2C.h>
-
 //Sets the LCD number of columns and rows
 int lcdColumns = 16;
 int lcdRows = 2;
-
 //Sets LCD address, number of columns and rows
 LiquidCrystal_I2C lcd(0x3F, lcdColumns, lcdRows);
-
+//++++++++++++++++++++++++++++++++++++
 //Mode variables
 enum Mode { outdoor, indoor, manual };
 Mode current_mode = manual;
-
 //The interval in which the mode display should be refreshed
 unsigned long mode_delay = 500;
 unsigned long mode_last_time = 0;
-
+//++++++++++++++++++++++++++++++++++++
 //Defines button pins
 #define BTN1_PIN 5
 #define BTN2_PIN 14
 #define BTN3_PIN 27
 //For the buttons it does not make sense to create an array, as each button has to
 //have a separate isr assigned, as isr's dont take parameters
-
 //Debounce times
 unsigned long btn1_debounce_delay = 5;
 unsigned long btn2_debounce_delay = 250;
 unsigned long btn3_debounce_delay = 250;
-
 //For every button added, the following variables and functions (isr) have to be declared (dependent on type of interrupt):
 bool btn1_pressed = false;
 unsigned long btn1_last_debounce_time = 0;  //The last time the output pin was toggled
 unsigned long btn2_last_debounce_time = 0;  //The last time the output pin was toggled
 unsigned long btn3_last_debounce_time = 0;  //The last time the output pin was toggled
-
+//++++++++++++++++++++++++++++++++++++
+//Defines water level pin 
+#define UPPER_WL_PIN 18
+#define LOWER_WL_PIN 19
+String waterStatus = "";
+//++++++++++++++++++++++++++++++++++++
+#define PUMP_PIN 15
+//++++++++++++++++++++++++++++++++++++
+//-----------------------------------------------------------------------------------------------------
+//++++++++++++++++++++++++++++++++++++
 void IRAM_ATTR Action_BTN1(){
   if((millis() - btn1_last_debounce_time) > btn1_debounce_delay){
     if(btn1_pressed == false){
@@ -70,6 +74,7 @@ void IRAM_ATTR Action_BTN1(){
         Serial_NewLine();
         Serial.print("Button 1 pressed");
         Change_Alarm(1);
+        Change_Pump(1);
       }
     }
     else if(btn1_pressed == true){
@@ -78,12 +83,13 @@ void IRAM_ATTR Action_BTN1(){
         Serial_NewLine();
         Serial.print("Button 1 released");
         Change_Alarm(0);
+        Change_Pump(0);
       }
     }
     btn1_last_debounce_time = millis();
   }
 }
-
+//++++++++++++++++++++++++++++++++++++
 void IRAM_ATTR Action_BTN2(){
   if((millis() - btn2_last_debounce_time) > btn2_debounce_delay){
     if(digitalRead(BTN2_PIN) == HIGH){
@@ -95,7 +101,7 @@ void IRAM_ATTR Action_BTN2(){
     btn2_last_debounce_time = millis();
   }
 }
-
+//++++++++++++++++++++++++++++++++++++
 void IRAM_ATTR Action_BTN3(){
   if((millis() - btn3_last_debounce_time) > btn3_debounce_delay){
     if(digitalRead(BTN3_PIN) == HIGH){
@@ -106,31 +112,34 @@ void IRAM_ATTR Action_BTN3(){
     btn3_last_debounce_time = millis();
   }
 }
+//++++++++++++++++++++++++++++++++++++
 //-----------------------------------------------------------------------------------------------------
 void setup() {
+  //Only needed when trying to find the address of the lcd display
   //Wire.begin();
-
   //Sets baud rate
   Serial.begin(115200);
-  
+
   Serial_NewLine();
   Init_DHT();
-  
   Serial_NewLine();
   Init_SM();
-
-  Init_BTN();
-
-  Init_LCD();
   
+  Init_BTN();
+  Init_LCD();
   Init_ALM();
+  Init_WL();
+  Init_PUMP();
 
+  //Sets the sensor timer accordingly so the sensors measure right away with system start
   sensor_last_time = -(sensor_delay + 1);
 }
 //-----------------------------------------------------------------------------------------------------
 void loop() {
+  //Only needed when trying to find the address of the lcd display
   //Find_LCD_ADR();
 
+  //Reads and displays sensor data
   if((millis() - sensor_last_time) > sensor_delay){
     Serial_NewLine();
     Read_DHT();
@@ -139,12 +148,15 @@ void loop() {
     Serial_NewLine();
     Read_WL();
 
+    //Resets timer
     sensor_last_time = millis();
   }
 
+  //Refreshes the displayed mode
   if((millis() - mode_last_time) > mode_delay){
     Print_Mode();
     
+    //Resets timer
     mode_last_time = millis();
   }
 }
@@ -415,15 +427,53 @@ void Init_ALM(){
 void Change_Alarm(bool set){
   digitalWrite(ALM_PIN, set); //turn buzzer on
 }
-
+//-----------------------------------------------------------------------------------------------------
+void Init_WL(){
+  pinMode(UPPER_WL_PIN, INPUT_PULLUP);
+  pinMode(LOWER_WL_PIN, INPUT_PULLUP);
+}
+//-----------------------------------------------------------------------------------------------------
 void Read_WL(){
-  int water_level = 0;
+  int upper_water_level = digitalRead(UPPER_WL_PIN);
+  int lower_water_level = digitalRead(LOWER_WL_PIN);
+
+  if(upper_water_level == HIGH && lower_water_level == HIGH){
+    waterStatus = ">75";
+  }
+  else if(upper_water_level == LOW && lower_water_level == HIGH){
+    waterStatus = "~50";
+  }
+  else if(upper_water_level == LOW && lower_water_level == LOW){
+    waterStatus = "<25";
+  }
+  else
+  {
+    waterStatus = "ERR";
+  }
 
   Write_LCD(6, 1, "L%");
   Write_LCD(8, 1, "   ");
-  Write_LCD(8, 1, String(water_level));
+  Write_LCD(8, 1, waterStatus);
 
   Serial.print("Water level: ");
-  Serial.print(water_level);
+  Serial.print(waterStatus);
   Serial.print(" %");
 }
+//-----------------------------------------------------------------------------------------------------
+void Init_PUMP(){
+  pinMode(PUMP_PIN, OUTPUT);
+}
+//-----------------------------------------------------------------------------------------------------
+void Change_Pump(bool set){
+  digitalWrite(PUMP_PIN, set);
+  Serial_NewLine();
+  if(set == true){
+    Serial.print("Pump started!");
+  }
+  else{
+    Serial.print("Pump stopped!");
+  }
+}
+//-----------------------------------------------------------------------------------------------------
+
+//-----------------------------------------------------------------------------------------------------
