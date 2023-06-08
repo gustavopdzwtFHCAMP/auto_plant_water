@@ -32,7 +32,7 @@ const char* WIFI_ssid = "Enter SSID here";  // Enter SSID here
 const char* WIFI_password = "Enter SSID Password here";    //Enter Password here
 const String location = "Vienna";            //Enter your City Name from api.weathermap.org
 
-const String apiKey = "a1c734b2aaa54624a1b93405230206";
+const String apiKey = "a1c734b2aaa54624a1b93405230206"; // API key for weather data
 //++++++++++++++++++++++++++++++++++++
 //time
 // enter your GMT Time offset
