@@ -437,13 +437,14 @@ void Read_WL(){
   int upper_water_level = digitalRead(UPPER_WL_PIN);
   int lower_water_level = digitalRead(LOWER_WL_PIN);
 
-  if(upper_water_level == HIGH && lower_water_level == HIGH){
+  if(upper_water_level == !HIGH && lower_water_level == !HIGH){
     waterStatus = ">75";
   }
-  else if(upper_water_level == LOW && lower_water_level == HIGH){
-    waterStatus = "~50";
+  else if(upper_water_level == !LOW && lower_water_level == !HIGH){
+    //waterStatus = "~50";
+    waterStatus = String(char(126)) + "50";
   }
-  else if(upper_water_level == LOW && lower_water_level == LOW){
+  else if(upper_water_level == !LOW && lower_water_level == !LOW){
     waterStatus = "<25";
   }
   else
