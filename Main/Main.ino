@@ -38,7 +38,7 @@ LiquidCrystal_I2C lcd(0x3F, lcdColumns, lcdRows);
 enum Mode { outdoor, indoor, manual };
 Mode current_mode = manual;
 //The interval in which the mode display should be refreshed
-unsigned long mode_delay = 500;
+unsigned long mode_delay = 0;//500;
 unsigned long mode_last_time = 0;
 //++++++++++++++++++++++++++++++++++++
 //Defines button pins
@@ -467,7 +467,7 @@ void Init_PUMP(){
 }
 //-----------------------------------------------------------------------------------------------------
 void Change_Pump(bool set){
-  digitalWrite(PUMP_PIN, set);
+  digitalWrite(PUMP_PIN, !set);
   Serial_NewLine();
   if(set == true){
     Serial.print("Pump started!");
