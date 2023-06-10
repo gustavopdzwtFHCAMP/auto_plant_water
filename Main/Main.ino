@@ -10,12 +10,19 @@
 DHT dht1(DHT1_PIN, DHT11);
 DHT dht2(DHT2_PIN, DHT11);
 DHT dht_array[] = {dht1, dht2};
+//This array saves the separate values of each sensor with [sensor][type of data]
+//so if you want to get the first sensors temparature value, you would call it like so:
+//dht_array_values[0][1]
+//for the second array, 0 will return humidity and 1 will return temperature
+float dht_array_values[2][2];
 int dht_array_size;
 //++++++++++++++++++++++++++++++++++++
 //Defines soil moisture sensor pins
 #define SM1_PIN 35
 #define SM2_PIN 34
 int sm_array[] = {SM1_PIN, SM2_PIN};
+//This array saves the separate values of each sensor
+float sm_array_values[2];
 int sm_array_size;
 //++++++++++++++++++++++++++++++++++++
 //The interval in which the sensors should be read and displayed
@@ -198,7 +205,14 @@ void Read_DHT(){
   {
     float h = dht_array[i].readHumidity();
     float t = dht_array[i].readTemperature();
-
+    dht_array_values[i][0] = h;
+    dht_array_values[i][1] = t;
+    /*
+    Serial.print(dht_array_values[i][0]);
+    Serial.print("\n");
+    Serial.print(dht_array_values[i][1]);
+    Serial.print("\n");
+    */
     if(!isnan(h)){
       total_h += h;
     }
@@ -276,7 +290,11 @@ void Read_SM(){
   for(int i = 0; i < sm_array_size; i++)
   {
     float sm = Adjust_SM(analogRead(sm_array[i]));
-    
+    sm_array_values[i] = sm;
+    /*
+    Serial.print(sm_array_values[i]);
+    Serial.print("\n");
+    */
     if(!isnan(sm)){
       total_sm += sm;
     }
