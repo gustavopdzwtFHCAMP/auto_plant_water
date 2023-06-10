@@ -126,10 +126,11 @@ void setup() {
   Init_SM();
   
   Init_BTN();
-  Init_LCD();
   Init_ALM();
   Init_WL();
   Init_PUMP();
+
+  Init_LCD();
 
   //Sets the sensor timer accordingly so the sensors measure right away with system start
   sensor_last_time = -(sensor_delay + 1);
@@ -306,7 +307,7 @@ void Read_SM(){
 }
 //-----------------------------------------------------------------------------------------------------
 float Adjust_SM(float data){
-  /*
+  
   //When completely dry, the sensor returns 4095
   data = abs(data - 4095);
 
@@ -326,9 +327,8 @@ float Adjust_SM(float data){
   
   data = (data/clamp_value)*100;
   return data;
-  */
   
-  return ( 100 - ( ( data / 4095 ) * 100 ) );
+  //return ( 100 - ( ( data / 4095 ) * 100 ) );
 }
 //-----------------------------------------------------------------------------------------------------
 void Init_BTN(){
@@ -463,6 +463,7 @@ void Read_WL(){
 //-----------------------------------------------------------------------------------------------------
 void Init_PUMP(){
   pinMode(PUMP_PIN, OUTPUT);
+  Change_Pump(0);
 }
 //-----------------------------------------------------------------------------------------------------
 void Change_Pump(bool set){
