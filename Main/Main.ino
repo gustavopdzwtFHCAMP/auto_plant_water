@@ -136,8 +136,9 @@ void IRAM_ATTR Action_BTN3(){
 //++++++++++++++++++++++++++++++++++++
 //-----------------------------------------------------------------------------------------------------
 void setup() {
-  //Only needed when trying to find the address of the lcd display
+  //Mostly needed when trying to find the address of the lcd display
   //Wire.begin();
+  
   //Sets baud rate
   Serial.begin(115200);
 
@@ -372,7 +373,7 @@ float Adjust_SM(float data){
   //Since 1555 is the lowest value possible when the sensor is in water,
   //meaning maximum moisture,
   //all values beyond 1555 do not have to be considered and can be clamped to 1555
-  int clamp_value = 1555;
+  int clamp_value = 1950;//1555;
 
   if(data > clamp_value){
     data -= (data - clamp_value);
@@ -493,7 +494,7 @@ void Monitor_ALM(){
     alarm_w = 0;
   }
 
-  if(average_sm == 100 || average_sm == 0){
+  if(average_sm > 90 || average_sm < 30 || isnan(average_sm)){
     alarm_s = 1;
   }
   else{
