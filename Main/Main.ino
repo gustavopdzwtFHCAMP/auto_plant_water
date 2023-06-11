@@ -24,6 +24,7 @@ int sm_array[] = {SM1_PIN, SM2_PIN};
 //This array saves the separate values of each sensor
 float sm_array_values[2];
 int sm_array_size;
+float average_sm;
 //++++++++++++++++++++++++++++++++++++
 //The interval in which the sensors should be read and displayed
 unsigned long sensor_delay = 5000;
@@ -31,6 +32,10 @@ unsigned long sensor_last_time = 0;
 //++++++++++++++++++++++++++++++++++++
 //Alarm
 #define ALM_PIN 33
+bool alarm_mute = false;
+bool alarm_t = 0;
+bool alarm_w = 0;
+bool alarm_s = 0;
 //++++++++++++++++++++++++++++++++++++
 //LCD I2C
 #include <Wire.h>
@@ -45,7 +50,7 @@ LiquidCrystal_I2C lcd(0x3F, lcdColumns, lcdRows);
 enum Mode { outdoor, indoor, manual };
 Mode current_mode = manual;
 //The interval in which the mode display should be refreshed
-unsigned long mode_delay = 0;//500;
+unsigned long mode_delay = 500;
 unsigned long mode_last_time = 0;
 //++++++++++++++++++++++++++++++++++++
 //Defines button pins
@@ -73,6 +78,11 @@ String waterStatus = "";
 //++++++++++++++++++++++++++++++++++++
 //-----------------------------------------------------------------------------------------------------
 //++++++++++++++++++++++++++++++++++++
+//Adding more functions to the interrupts may result in a guru meditation error,
+//as an ISR utilizes the processor fully
+//This means that the processor wants to access certain ressources that are not free yet
+//So after adding a function to the ISR, immediately test out your changes on the microcontroller
+//to see if anything breaks
 void IRAM_ATTR Action_BTN1(){
   if((millis() - btn1_last_debounce_time) > btn1_debounce_delay){
     if(btn1_pressed == false){
@@ -80,8 +90,7 @@ void IRAM_ATTR Action_BTN1(){
         btn1_pressed = true;
         Serial_NewLine();
         Serial.print("Button 1 pressed");
-        Change_Alarm(1);
-        Change_Pump(1);
+        Change_PUMP(1);
       }
     }
     else if(btn1_pressed == true){
@@ -89,8 +98,8 @@ void IRAM_ATTR Action_BTN1(){
         btn1_pressed = false;
         Serial_NewLine();
         Serial.print("Button 1 released");
-        Change_Alarm(0);
-        Change_Pump(0);
+        Change_PUMP(0);
+        //Read_WL();
       }
     }
     btn1_last_debounce_time = millis();
@@ -103,7 +112,7 @@ void IRAM_ATTR Action_BTN2(){
       Serial_NewLine();
       //Serial.print("\n");
       Serial.print("Button 2 pressed");
-      Change_Mode();
+      Change_MODE();
     }
     btn2_last_debounce_time = millis();
   }
@@ -115,6 +124,8 @@ void IRAM_ATTR Action_BTN3(){
       Serial_NewLine();
       //Serial.print("\n");
       Serial.print("Button 3 pressed");
+      //Change_ALM(0);
+      alarm_mute = !alarm_mute;
     }
     btn3_last_debounce_time = millis();
   }
@@ -127,17 +138,18 @@ void setup() {
   //Sets baud rate
   Serial.begin(115200);
 
+  Init_LCD();
+
   Serial_NewLine();
   Init_DHT();
   Serial_NewLine();
   Init_SM();
   
-  Init_BTN();
   Init_ALM();
   Init_WL();
   Init_PUMP();
 
-  Init_LCD();
+  Init_BTN();
 
   //Sets the sensor timer accordingly so the sensors measure right away with system start
   sensor_last_time = -(sensor_delay + 1);
@@ -162,11 +174,13 @@ void loop() {
 
   //Refreshes the displayed mode
   if((millis() - mode_last_time) > mode_delay){
-    Print_Mode();
+    Print_MODE();
     
     //Resets timer
     mode_last_time = millis();
   }
+
+  Monitor_ALM();
 }
 //-----------------------------------------------------------------------------------------------------
 void Serial_NewLine(){
@@ -311,7 +325,8 @@ void Read_SM(){
   }
 
   //Calculates average values of the read sensor data (of one cycle)
-  float average_sm = total_sm/adjusted_sm_array_size;
+  //average_sm = 0;
+  average_sm = total_sm/adjusted_sm_array_size;
   //average_sm = 100;
 
   Write_LCD(6, 0, "S%");
@@ -402,7 +417,7 @@ void Write_LCD(int x, int y, String message){
   lcd.print(message);
 }
 //-----------------------------------------------------------------------------------------------------
-void Change_Mode(){
+void Change_MODE(){
   Serial_NewLine();
   //Serial.print("\n");
   switch(current_mode){
@@ -421,7 +436,9 @@ void Change_Mode(){
   }
 }
 //-----------------------------------------------------------------------------------------------------
-void Print_Mode(){
+void Print_MODE(){
+  Write_LCD(12, 1, "M:");
+
   int x = 14;
   int y = 1;
 
@@ -440,10 +457,51 @@ void Print_Mode(){
 //-----------------------------------------------------------------------------------------------------
 void Init_ALM(){
   pinMode(ALM_PIN, OUTPUT);
+  Print_ALM();
 }
 //-----------------------------------------------------------------------------------------------------
-void Change_Alarm(bool set){
+void Change_ALM(bool set){
   digitalWrite(ALM_PIN, set); //turn buzzer on
+}
+//-----------------------------------------------------------------------------------------------------
+void Monitor_ALM(){
+  if(waterStatus == "<25" || waterStatus == "ERR"){
+    alarm_w = 1;
+  }
+  else{
+    alarm_w = 0;
+  }
+
+  if(average_sm == 100 || average_sm == 0){
+    alarm_s = 1;
+  }
+  else{
+    alarm_s = 0;
+  }
+
+  if((alarm_t == 0 && alarm_w == 0 && alarm_s == 0) || alarm_mute == true){
+    Change_ALM(0);
+  }
+  else if(alarm_mute == false){
+    Change_ALM(1);
+  }
+
+  Print_ALM();
+}
+//-----------------------------------------------------------------------------------------------------
+void Print_ALM(){
+  int x = 12;
+  if(alarm_mute == false){Write_LCD(x, 0, "A");}
+  else{Write_LCD(x, 0, "a");}
+  x++;
+  if(alarm_t == true){Write_LCD(x, 0, "T");}
+  else{Write_LCD(x, 0, "t");}
+  x++;
+  if(alarm_w == true){Write_LCD(x, 0, "W");}
+  else{Write_LCD(x, 0, "w");}
+  x++;
+  if(alarm_s == true){Write_LCD(x, 0, "S");}
+  else{Write_LCD(x, 0, "s");}
 }
 //-----------------------------------------------------------------------------------------------------
 void Init_WL(){
@@ -465,8 +523,7 @@ void Read_WL(){
   else if(upper_water_level == !LOW && lower_water_level == !LOW){
     waterStatus = "<25";
   }
-  else
-  {
+  else{
     waterStatus = "ERR";
   }
 
@@ -481,10 +538,10 @@ void Read_WL(){
 //-----------------------------------------------------------------------------------------------------
 void Init_PUMP(){
   pinMode(PUMP_PIN, OUTPUT);
-  Change_Pump(0);
+  Change_PUMP(0);
 }
 //-----------------------------------------------------------------------------------------------------
-void Change_Pump(bool set){
+void Change_PUMP(bool set){
   digitalWrite(PUMP_PIN, !set);
   Serial_NewLine();
   if(set == true){
