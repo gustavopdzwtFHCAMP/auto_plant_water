@@ -16,7 +16,10 @@ DHT dht_array[] = {dht1, dht2};
 //for the second array, 0 will return humidity and 1 will return temperature
 float dht_array_values[2][2];
 int dht_array_size;
+float average_h;
+float average_t;
 //++++++++++++++++++++++++++++++++++++
+#include <math.h>
 //Defines soil moisture sensor pins
 #define SM1_PIN 35
 #define SM2_PIN 34
@@ -32,7 +35,7 @@ unsigned long sensor_last_time = 0;
 //++++++++++++++++++++++++++++++++++++
 //Alarm
 #define ALM_PIN 33
-bool alarm_mute = false;
+bool alarm_mute = true;
 bool alarm_t = 0;
 bool alarm_w = 0;
 bool alarm_s = 0;
@@ -50,7 +53,7 @@ LiquidCrystal_I2C lcd(0x3F, lcdColumns, lcdRows);
 enum Mode { outdoor, indoor, manual };
 Mode current_mode = manual;
 //The interval in which the mode display should be refreshed
-unsigned long mode_delay = 500;
+unsigned long mode_delay = 0;//500;
 unsigned long mode_last_time = 0;
 //++++++++++++++++++++++++++++++++++++
 //Defines button pins
@@ -153,6 +156,7 @@ void setup() {
 
   //Sets the sensor timer accordingly so the sensors measure right away with system start
   sensor_last_time = -(sensor_delay + 1);
+
 }
 //-----------------------------------------------------------------------------------------------------
 void loop() {
@@ -227,14 +231,11 @@ void Read_DHT(){
     Serial.print(dht_array_values[i][1]);
     Serial.print("\n");
     */
-    if(!isnan(h)){
+    if(!isnan(h) && !isnan(t)){
       total_h += h;
-    }
-    if(!isnan(t)){
       total_t += t;
     }
-
-    if(isnan(h) || isnan(t)){
+    else{
       adjusted_dht_array_size--;
     }
 
@@ -251,20 +252,28 @@ void Read_DHT(){
   }
   
   //Calculates average values of the read sensor data (of one cycle)
-  float average_h = total_h/adjusted_dht_array_size;
-  float average_t = total_t/adjusted_dht_array_size;
-  //average_h = 100;
-  //average_t = 100;
-
+  average_h = total_h/adjusted_dht_array_size;
+  average_t = total_t/adjusted_dht_array_size;
+  
   Write_LCD(0, 0, "H%");
   Write_LCD(2, 0, "   ");
-  Write_LCD(2, 0, String(average_h, 0));
+  if(!isnan(average_h)){
+    Write_LCD(2, 0, String(average_h, 0));
+  }
+  else{
+    Write_LCD(2, 0, "ERR");
+  }
 
   Write_LCD(0, 1, "T");
   //Write_LCD(2, 1, "C");
   Write_LCD(1, 1, String(char(223)));
   Write_LCD(2, 1, "   ");
-  Write_LCD(2, 1, String(average_t, 0));
+  if(!isnan(average_t)){
+    Write_LCD(2, 1, String(average_t, 0));
+  }
+  else{
+    Write_LCD(2, 1, "ERR");
+  }
 
   Serial.print("A, ");
   Serial.print("Humidity: ");
@@ -325,13 +334,16 @@ void Read_SM(){
   }
 
   //Calculates average values of the read sensor data (of one cycle)
-  //average_sm = 0;
   average_sm = total_sm/adjusted_sm_array_size;
-  //average_sm = 100;
 
   Write_LCD(6, 0, "S%");
   Write_LCD(8, 0, "   ");
-  Write_LCD(8, 0, String(average_sm, 0));
+  if(!isnan(average_sm)){
+    Write_LCD(8, 0, String(average_sm, 0));
+  }
+  else{
+    Write_LCD(8, 0, "ERR");
+  }
 
   Serial.print("A, ");
   Serial.print("Soil moisture: ");
@@ -348,6 +360,14 @@ float Adjust_SM(float data){
   //0 - completely dry
   //1555 - lowest possible value when 
   //1947 (~1950) - max value
+
+  //If the datas value is still higher than 1950 even after adjustment, it means that the sensor is disconnected
+  //If the sensor is clearly disconnected, but still returns something else than an error,
+  //lower the threshold closer to 1850
+  if(data > 1950){
+    data = nan("");
+    return data;
+  }
   
   //Since 1555 is the lowest value possible when the sensor is in water,
   //meaning maximum moisture,
@@ -359,6 +379,7 @@ float Adjust_SM(float data){
   }
   
   data = (data/clamp_value)*100;
+
   return data;
   
   //return ( 100 - ( ( data / 4095 ) * 100 ) );
