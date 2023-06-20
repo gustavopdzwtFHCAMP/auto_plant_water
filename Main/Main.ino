@@ -487,19 +487,50 @@ void Change_ALM(bool set){
 }
 //-----------------------------------------------------------------------------------------------------
 void Monitor_ALM(){
-  if(waterStatus == "<25" || waterStatus == "ERR"){
+  if(waterStatus == "<25"){
     alarm_w = 1;
   }
   else{
     alarm_w = 0;
   }
 
-  if(average_sm > 90 || average_sm < 30 || isnan(average_sm)){
+  if(average_sm > 90 || average_sm < 30){
     alarm_s = 1;
   }
   else{
     alarm_s = 0;
   }
+
+  //++++++++++++++++++++++++++++++++++++
+  bool alarm_t_check = false;
+
+  for(int i = 0; i < dht_array_size; i++)
+  {
+    if(isnan(dht_array_values[i][0]) || isnan(dht_array_values[i][1]))
+    {
+      alarm_t_check = true;
+    }
+  }
+
+  for(int i = 0; i < sm_array_size; i++)
+  {
+    if(isnan(sm_array_values[i]))
+    {
+      alarm_t_check = true;
+    }
+  }
+
+  if(waterStatus == "ERR"){
+    alarm_t_check = true;
+  }
+
+  if(alarm_t_check == true){
+    alarm_t = 1;
+  }
+  else{
+    alarm_t = 0;
+  }
+  //++++++++++++++++++++++++++++++++++++
 
   if((alarm_t == 0 && alarm_w == 0 && alarm_s == 0) || alarm_mute == true){
     Change_ALM(0);
@@ -564,7 +595,7 @@ void Init_PUMP(){
 }
 //-----------------------------------------------------------------------------------------------------
 void Change_PUMP(bool set){
-  digitalWrite(PUMP_PIN, !set);
+  digitalWrite(PUMP_PIN, set);
   Serial_NewLine();
   if(set == true){
     Serial.print("Pump started!");
