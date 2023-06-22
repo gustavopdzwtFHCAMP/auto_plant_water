@@ -1,12 +1,5 @@
 //-----------------------------------------------------------------------------------------------------
 //++++++++++++++++++++++++++++++++++++
-#include <WiFi.h>
-#include <HTTPClient.h>
-#include <ArduinoJson.h>
-#include "time.h"           //internet time
-#include "elapsedMillis.h"  // repeat a task at regular intervals by checking if enough time has elapsed since the task
-
-//++++++++++++++++++++++++++++++++++++
 #include <DHT.h>
 #define DHTTYPE DHT11
 //Defines dht sensor pins
@@ -44,11 +37,17 @@ enum SMState {
   aboveThreshold,
   Invalid  // high discrepancy
 };
+//++++++++++++++++++++++++++++++++++++
+#include <WiFi.h>
+#include <HTTPClient.h>
+#include <ArduinoJson.h>
+#include "time.h"           //internet time
+#include "elapsedMillis.h"  // repeat a task at regular intervals by checking if enough time has elapsed since the task
 
 //++++++++++++++++++++++++++++++++++++
 //make sure your WiFi is 2.4 GHz
-const char* WIFI_ssid = "";  // Enter SSID here
-const char* WIFI_password = "";    //Enter Password here
+const char* wifi_ssid = "";  // Enter SSID here
+const char* wifi_password = "";    //Enter Password here
 const String location = "Vienna";            //Enter your City Name from api.weathermap.org
 
 const String apiKey = "a1c734b2aaa54624a1b93405230206";  // API key for weather data
@@ -68,8 +67,6 @@ elapsedSeconds CurrentTime;
 elapsedSeconds GetTimeData;
 elapsedSeconds GetWeatherData;
 elapsedSeconds WaitPeriod;
-//elapsedSeconds PumpDelay;
-
 //++++++++++++++++++++++++++++++++++++
 // Weather forecast data
 String JSONData;
@@ -107,7 +104,7 @@ LiquidCrystal_I2C lcd(0x3F, lcdColumns, lcdRows);
 enum Mode { outdoor,
             indoor,
             manual };
-Mode current_mode = outdoor;
+Mode current_mode = manual;
 //The interval in which the mode display should be refreshed
 unsigned long mode_delay = 0;  //500;
 unsigned long mode_last_time = 0;
@@ -184,11 +181,11 @@ void onPress_Action_BTN1() {
   Serial_NewLine();
   Serial.print("Button 1 pressed");
   if (current_mode == manual) {  // Check if the current mode is manual
-    if (waterStatus != "<25") {  // Check if water level is low
+    if (waterStatus == "<25") {  // Check if water level is low
       Serial.println("\n Water level is low. Cannot start watering.");
       return;
     }
-    Change_PUMP(1);  // Turn on pump
+    Change_PUMP(1);  
   }
   else {
     Serial.println("\n Invalid mode, current mode is not manual.");
@@ -200,7 +197,7 @@ void onRelease_Action_BTN1() {
   Serial_NewLine();
   Serial.print("Button 1 released");
   if (current_mode == manual) {  // Check if the current mode is manual
-    Change_PUMP(0);              // Turn off pump
+    Change_PUMP(0);             
   }
 }
 
@@ -232,6 +229,7 @@ void onRelease_Action_BTN1() {
   }
 }
 */
+
  // Callback function for button alarm stop
 void Action_BTN3() {
   Serial_NewLine();
@@ -254,7 +252,7 @@ void setup() {
   btn2.setDebounceTicks(50);
   btn3.setDebounceTicks(50);
 
-  // Attach callback functions for button press and release events
+  // Attach callback functions for button longpress and release events
   btn1.attachLongPressStart(onPress_Action_BTN1);
   btn1.attachLongPressStop(onRelease_Action_BTN1);
   // Attach a callback function for the button press event
@@ -263,50 +261,46 @@ void setup() {
 
   Init_LCD();
 
+  //ooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo
+
+  Init_WIFI();
+  if (Check_WIFI() == true) {
+    // config internet time
+    configTime(gmtOffset_sec, daylightOffset_sec, NPT_TIME_SERVER);
+
+    // now get the time
+    GetInternetTime();
+
+    // optional to print time to serial monitor
+    printLocalTime();
+
+    GetDayForcast(rainProbability, dailyWillItRain);
+  }
+  //ooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo
+
   Serial_NewLine();
   Init_DHT();
   Serial_NewLine();
   Init_SM();
 
-
+  Init_ALM();
   Init_WL();
   Init_PUMP();
-
-  //Init_BTN();
-
-  //Sets the sensor timer accordingly so the sensors measure right away with system start
-  sensor_last_time = -(sensor_delay + 1);
-
-  WiFi.mode(WIFI_STA);
-  // Connect to Wi-Fi
-  WiFi.begin(WIFI_ssid, WIFI_password);
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(1000);
-    Serial_NewLine();
-    Serial.println("Connecting to WiFi...");
-  }
-  Serial.println("Connected to WiFi");
-  // config internet time
-  configTime(gmtOffset_sec, daylightOffset_sec, NPT_TIME_SERVER);
-
-  // now get the time
-  GetInternetTime();
-
-  // optional to print time to serial monitor
-  printLocalTime();
-
-  GetDayForcast(rainProbability, dailyWillItRain);
+  // Init_BTN();
 
   GetTimeData = 0;
   GetWeatherData = 0;
   WaitPeriod = 0;
 
-  current_mode = outdoor;
+ // current_mode = outdoor;
 
-  // Check the mode and trigger watering if necessary
+ /* // Check the mode and trigger watering if necessary
   if (current_mode == indoor || current_mode == outdoor) {
     handleWatering();
   }
+*/
+  //Sets the sensor timer accordingly so the sensors measure right away with system start
+  sensor_last_time = -(sensor_delay + 1);
 }
 //-----------------------------------------------------------------------------------------------------
 void loop() {
@@ -327,14 +321,21 @@ void loop() {
 
   //Reads and displays sensor data
   if ((millis() - sensor_last_time) > sensor_delay) {
-    Serial_NewLine();
+    Serial.print("\n");
+    Serial.print("+---------------------------------------------------------------------------------+");
+    Serial.print("\n");
+
     printLocalTime();
+
     Serial_NewLine();
     Read_DHT(average_h, average_t);
+
     Serial_NewLine();
     Read_SM(sm_array_size, average_sm);
+
     Serial_NewLine();
     Read_WL();
+
     Serial_NewLine();
     Read_Weather();
 
@@ -342,24 +343,25 @@ void loop() {
     sensor_last_time = millis();
   }
 
-  //Refreshes the displayed mode
-  if ((millis() - mode_last_time) > mode_delay) {
-    Print_MODE();
-
-    //Resets timer
-    mode_last_time = millis();
-  }
-
+  //++++++++++++++++++++++++++++++++++++
   // update the weather forecase every hour
   if (GetWeatherData > 3600 * 1) {  // 3600 check every 1 hour
     GetDayForcast(rainProbability, dailyWillItRain);
     GetWeatherData = 0;
   }
-
+  //++++++++++++++++++++++++++++++++++++
   //Check if 1 minutes have passed
   if (WaitPeriod > 60 * 1) {
     handleWatering();
     WaitPeriod = 0;
+  }
+  //++++++++++++++++++++++++++++++++++++
+  //Refreshes the displayed mode and checks for alarms
+  if ((millis() - mode_last_time) > mode_delay) {
+    Print_MODE();
+
+    //Resets timer
+    mode_last_time = millis();
   }
 
   Monitor_ALM();
@@ -660,7 +662,7 @@ void Monitor_ALM() {
     alarm_w = 0;
   }
 
-  if (average_sm > 90 || average_sm < 30) {
+  if (average_sm > 90 || average_sm < 20) {
     alarm_s = 1;
   } else {
     alarm_s = 0;
@@ -772,9 +774,56 @@ void Change_PUMP(bool set) {
     Serial.print("Pump stopped!");
   }
 }
+
+//-----------------------------------------------------------------------------------------------------
+void Init_WIFI() {
+  WiFi.mode(WIFI_STA);
+  // Connect to Wi-Fi
+  WiFi.begin(wifi_ssid, wifi_password);
+  Serial_NewLine();
+  Serial.print("Connecting to WiFi...");
+  Write_LCD(0, 0, "Connecting WiFi!");
+
+  float start_time = millis();
+  int timeout = 20000;  //equals 20 seconds
+
+  while (1) {
+    if (WiFi.status() == WL_CONNECTED) {
+      Serial_NewLine();
+      Serial.print("WiFi connection was established successfully!");
+      Write_LCD(0, 0, "                ");
+      Write_LCD(0, 0, "WiFi connected!");
+      delay(2500);
+      Write_LCD(0, 0, "                ");
+      break;
+    }
+    if (millis() - start_time > timeout) {
+      Serial_NewLine();
+      Serial.print("Connection timeout!");
+      Serial.print("\n");
+      Serial.print("WiFi connection was not established!");
+      Write_LCD(0, 0, "                ");
+      Write_LCD(0, 0, "WiFi failed!");
+      delay(2500);
+      Write_LCD(0, 0, "                ");
+      break;
+    }
+  }
+}
+//-----------------------------------------------------------------------------------------------------
+bool Check_WIFI() {
+  Serial_NewLine();
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.print("Connected to WiFi");
+    return true;
+  } else {
+    Serial.print("Not connected to WiFi");
+    return false;
+  }
+}
 //-----------------------------------------------------------------------------------------------------
 
-// To check if the sensor value ar below or above the threshold
+// To check if the soil moisture sensor value are below or above the threshold
 SMState checkSensorValues(float sm_array_values[], int sm_array_size) {
   Serial_NewLine();
   SMState state = belowThreshold;
@@ -817,22 +866,22 @@ SMState checkSensorValues(float sm_array_values[], int sm_array_size) {
 
 // A helper function that prints an error message
 void handleError() {
-  Serial.println("Error: Discrepancy too high");
+  Serial.println("Error: Discrepancy too high. Please check the soil moisture sensor");
   return;
 }
 //-----------------------------------------------------------------------------------------------------
 
 // Decide watering duration based on sensor data
 int decide_indoor_watering_duration(float* sm_array_values, int sm_array_size) {
-  Serial_NewLine();
+  //Serial_NewLine();
   int watering_duration = 0;  // Default duration is 0 (no watering needed)
 
   SMState sensorState = checkSensorValues(sm_array_values, sm_array_size);
 
-    if (sensorState == Invalid) {  // Check for error value
-      handleError();
-      return -1;
-    }
+  if (sensorState == Invalid) {  // Check for error value
+    handleError();
+    return -1;
+  }
 
   if (sensorState == belowThreshold) {
     if (average_h < 60 && average_t > 24 && average_t < 30) {
@@ -850,19 +899,19 @@ int decide_indoor_watering_duration(float* sm_array_values, int sm_array_size) {
 //--------------------------------------------------------------------------------------------------
 // Decide watering duration based on sensor data and weather forecast
 int decide_outdoor_watering_duration(float* sm_array_values, int sm_array_size) {
-  Serial_NewLine();
+ // Serial_NewLine();
   int watering_duration = 0;  // Default duration is 0 (no watering needed)
 
   SMState sensorState = checkSensorValues(sm_array_values, sm_array_size);
 
 
-    if (sensorState == Invalid) {  // Check for error value
-      handleError();
-      return -1;
-    }
+  if (sensorState == Invalid) {  // Check for error value
+    handleError();
+    return -1;
+  }
 
   if (sensorState == belowThreshold) {
-    if (average_sm < 15) {
+    if (average_sm < 21) {
       watering_duration = 10;  // Water for 10 seconds
     } else if (dailyWillItRain && rainProbability < 50) {
       watering_duration = decide_indoor_watering_duration(sm_array_values, sm_array_size) / 2;
@@ -875,11 +924,9 @@ int decide_outdoor_watering_duration(float* sm_array_values, int sm_array_size) 
 
   return watering_duration;
 }
-
-//-----------------------------------------------------------------------------------------------------
 // Function to handle/manage  watering based on the selected model
 void handleWatering() {
-  Serial_NewLine();
+ // Serial_NewLine();
   SMState sensorState = checkSensorValues(sm_array_values, sm_array_size);
 
   switch (current_mode) {
@@ -914,21 +961,19 @@ void handleWatering() {
 
 //-----------------------------------------------------------------------------------------------------
 void handleWateringProcess(int watering_duration, Mode current_mode) {
-  Serial_NewLine();
   unsigned long startTime = millis();                            // Get the start time
   unsigned long endTime = startTime + watering_duration * 1000;  // Calculate the end time
 
 
   //Helps prevent damage to the pump when water level is low.
   // Check water level is low if waterStatus is "<25" exit the function
-
-  if (waterStatus != "<25") {
+  if (waterStatus == "<25") {
     Serial.println("Water level is low. Cannot start watering.");
     return;
   }
 
   Change_PUMP(1);
-  Serial.print("\n Watering ");
+  Serial.println("Watering ");
 
   if (current_mode == indoor) {
     Serial.print("indoor");
@@ -944,7 +989,9 @@ void handleWateringProcess(int watering_duration, Mode current_mode) {
 
   while (millis() < endTime) {
     // Continue watering until the specified duration is reached
-    // Additional code for controlling water pump goes here
+    // This section of the code will keep looping until the current time (obtained by millis()) is less than the endTime.
+    // It ensures that the watering process continues for the specified duration.
+    
   }
 
   Change_PUMP(0);
@@ -981,8 +1028,6 @@ void printLocalTime() {
   Serial.println(buf);
 }
 
-
-
 //-----------------------------------------------------------------------------------------------------
 
 void Read_Weather() {
@@ -992,7 +1037,7 @@ void Read_Weather() {
   Serial.print("Chance of rain: ");
   Serial.print(rainProbability);
   Serial.println("%");
-  Serial.print("Will it rain today: ");
+  Serial.print("Will it rain today?: ");
   Serial.println(dailyWillItRain ? "Yes" : "No");
   Serial.print("API_Humidity: ");
   Serial.print(api_humidity);
@@ -1005,6 +1050,7 @@ void Read_Weather() {
 void GetDayForcast(float& rainProbability, bool& dailyWillItRain) {
   Serial_NewLine();
   HTTPClient http;
+  //Setting a timeout for HTTP requests, prevent your program from hanging indefinitely
   http.setTimeout(6000);
 
   api_humidity = 0;
@@ -1012,9 +1058,10 @@ void GetDayForcast(float& rainProbability, bool& dailyWillItRain) {
   rainProbability = 0;
   dailyWillItRain = false;
 
-  Serial.println("Weather Forecast");
+  //Serial.println("Weather Forecast");
   if (WiFi.status() == WL_CONNECTED) {
-    Serial.println("WL_CONNECTED");
+    Serial.print("Weather forecast started");
+    //Serial.println("WL_CONNECTED");
 
     // Construct the API URL
     String url = "https://api.weatherapi.com/v1/forecast.json?key=" + apiKey + "&q=" + location + "&days=1";
@@ -1048,11 +1095,10 @@ void GetDayForcast(float& rainProbability, bool& dailyWillItRain) {
       http.end();
     }
   } else {
-    Serial.println("no wifi connection");
+    Serial.println("Not connected to WiFi, thus the weather forecast could not be accessed!");
   }
   Read_Weather();
 }
-
 
 //-----------------------------------------------------------------------------------------------------
 float extractRainProbability(JsonDocument& doc) {
