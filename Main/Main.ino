@@ -4,17 +4,17 @@
 #define DHTTYPE DHT11
 //Defines dht sensor pins
 #define DHT1_PIN 26
-#define DHT2_PIN 25
+//#define DHT2_PIN 25
 //Declares dht sensors
 //DHT dht(DHTPIN, DHTTYPE);
 DHT dht1(DHT1_PIN, DHT11);
-DHT dht2(DHT2_PIN, DHT11);
-DHT dht_array[] = {dht1, dht2};
+//DHT dht2(DHT2_PIN, DHT11);
+DHT dht_array[] = {dht1};//, dht2};
 //This array saves the separate values of each sensor with [sensor][type of data]
 //so if you want to get the first sensors temparature value, you would call it like so:
 //dht_array_values[0][1]
 //for the second array, 0 will return humidity and 1 will return temperature
-float dht_array_values[2][2];
+float dht_array_values[1][1];
 int dht_array_size;
 float average_h;
 float average_t;
@@ -22,10 +22,10 @@ float average_t;
 #include <math.h>
 //Defines soil moisture sensor pins
 #define SM1_PIN 35
-#define SM2_PIN 34
-int sm_array[] = {SM1_PIN, SM2_PIN};
+//#define SM2_PIN 34
+int sm_array[] = {SM1_PIN};//, SM2_PIN};
 //This array saves the separate values of each sensor
-float sm_array_values[2];
+float sm_array_values[1];
 int sm_array_size;
 float average_sm;
 //++++++++++++++++++++++++++++++++++++
@@ -39,6 +39,8 @@ bool alarm_mute = true;
 bool alarm_t = 0;
 bool alarm_w = 0;
 bool alarm_s = 0;
+unsigned long alarm_delay = 500;
+unsigned long alarm_last_time = 0;
 //++++++++++++++++++++++++++++++++++++
 //LCD I2C
 #include <Wire.h>
@@ -77,11 +79,16 @@ unsigned long btn3_last_debounce_time = 0;  //The last time the output pin was t
 #define LOWER_WL_PIN 19
 String water_status = "";
 //++++++++++++++++++++++++++++++++++++
-#define PUMP_PIN 15
+#define PUMP_PIN 4
+//pins tested: 0, 1, 2, 3, 4, 5, 6-11, 12, 13, 14, 15
+//these are all output only pins, meaning they should be best suited
+unsigned long max_pump_time = 500;
+unsigned long pump_last_time = 0;
+bool pump_checked = false;
 //++++++++++++++++++++++++++++++++++++
-unsigned long weather_forecast_delay = 1000 * 60 * 60 * 1; //every one hour
+unsigned long weather_forecast_delay = 1000 * 60 * 60 * 4;
 unsigned long weather_forecast_last_time = 0;
-unsigned long watering_delay = 1000 * 20;//60 * 60 * 2;
+unsigned long watering_delay = 1000 * 10;//60 * 60 * 2;
 unsigned long watering_last_time = 0;
 //++++++++++++++++++++++++++++++++++++
 #include <WiFi.h>
@@ -142,6 +149,7 @@ void IRAM_ATTR Action_BTN1(){
         Serial.print("Button 1 pressed");
         if(current_mode == manual){
           Change_PUMP(1);
+          //pump_last_time = millis();
         }
       }
     }
@@ -181,6 +189,13 @@ void IRAM_ATTR Action_BTN3(){
       Serial.print("Button 3 pressed");
       //Change_ALM(0);
       alarm_mute = !alarm_mute;
+      Serial_New_Line();
+      if(alarm_mute == true){
+        Serial.print("Changed alarm to: OFF");
+      }
+      else{
+        Serial.print("Changed alarm to: ON");
+      }
     }
     btn3_last_debounce_time = millis();
   }
@@ -190,17 +205,12 @@ void IRAM_ATTR Action_BTN3(){
 void setup() {
   //Mostly needed when trying to find the address of the lcd display
   //Wire.begin();
-  
   //Sets baud rate
   Serial.begin(115200);
-
   Init_LCD();
-
+  /*
   Init_WIFI();
-
-  //ooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo
-  ///*
-  
+  //++++++++++++++++++++++++++++++++++++
   if(Check_WIFI() == true){
     // config internet time
     configTime(gmt_offset_sec, daylight_offset_sec, NPT_TIME_SERVER);
@@ -208,93 +218,118 @@ void setup() {
     Get_TIME();
     // optional to print time to serial monitor
     Print_TIME();
-    /*if(current_mode == outdoor){
-      
-    }*/
     Get_Day_Forecast(rain_probability, daily_will_it_rain);
   }
-  
   get_time_data = 0;
   get_weather_data = 0;
   wait_period = 0;
-
-  //*/
-  //ooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo
-
-  Serial_New_Line();
-  Init_DHT();
-  Serial_New_Line();
+  */
+  //++++++++++++++++++++++++++++++++++++
+  //On setup, the pump gets set to LOW and initializes the DHT sensors, as they can get disrupted during pump usage
+  Init_PUMP();
+  //Init_DHT();
   Init_SM();
-  
   Init_ALM();
   Init_WL();
   Init_PUMP();
-
   Init_BTN();
-
+  //++++++++++++++++++++++++++++++++++++
   //Sets the sensor timer accordingly so the sensors measure right away with system start
   sensor_last_time = -(sensor_delay + 1);
+  //mode_last_time = -(mode_delay + 1);
+  alarm_last_time = -(alarm_delay + 1);
 }
 //-----------------------------------------------------------------------------------------------------
 void loop() {
-  //Only needed when trying to find the address of the lcd display
-  //Find_LCD_ADR();
+  if(digitalRead(PUMP_PIN) == LOW){
+    pump_checked = false;
+    //++++++++++++++++++++++++++++++++++++
+    //Only needed when trying to find the address of the lcd display
+    //Find_LCD_ADR();
+    //++++++++++++++++++++++++++++++++++++
+    /*
+    // update the time every day, once we have internet time we'll use millis() to keep it updated
+    if (GetTimeData > 86400) {  // 86400 reset the time every day
+      GetTimeData = 0;
+      GetInternetTime();
+      //  pumpOnCount = 0; // Reset the pump activation count
+    }
+    */
+    //++++++++++++++++++++++++++++++++++++
+    //Reads and displays sensor data
+    if((millis() - sensor_last_time) > sensor_delay){
+      Serial_New_Line();
+      Read_DHT();
+      Serial.print("\n");
+      Read_SM();
+      Serial.print("\n");
+      Read_WL();
+      Serial.print("\n");
+      Print_MODE();
+      Serial.print("\n");
+      //Monitor_ALM();
+      Print_ALM();
 
-  /*
-  // update the time every day, once we have internet time we'll use millis() to keep it updated
-  if (GetTimeData > 86400) {  // 86400 reset the time every day
-    GetTimeData = 0;
-    GetInternetTime();
-    //  pumpOnCount = 0; // Reset the pump activation count
-  }
-  */
+      //Resets timer
+      sensor_last_time = millis();
+    }
+    //++++++++++++++++++++++++++++++++++++
+    if(current_mode == outdoor){
+      if((millis() - weather_forecast_last_time) > weather_forecast_delay){
+        if(Check_WIFI() == false){
+          Init_WIFI();
+        }
+        if(Check_WIFI() == true){
+          Get_Day_Forecast(rain_probability, daily_will_it_rain);
+          //Resets timer
+          weather_forecast_last_time = millis();
+        }
+        else{
+          weather_forecast_last_time = millis() - weather_forecast_delay / 2;
+        }
+      }
+    }
+    //++++++++++++++++++++++++++++++++++++
+    if((millis() - watering_last_time) > watering_delay){
+      Serial_New_Line();
+      Serial.print("Handling watering...");
+      Handle_Watering();
 
-  //++++++++++++++++++++++++++++++++++++
-  //Reads and displays sensor data
-  if((millis() - sensor_last_time) > sensor_delay){
-    //Serial_NewLine();
-    Serial.print("\n");
-    Serial.print("+---------------------------------------------------------------------------------+");
-    Serial.print("\n");
-
-    //Serial_New_Line();
-    Read_DHT();
-
-    Serial_New_Line();
-    Read_SM();
-    
-    Serial_New_Line();
-    Read_WL();
-
-    //Resets timer
-    sensor_last_time = millis();
-  }
-  //++++++++++++++++++++++++++++++++++++
-  if((millis() - weather_forecast_last_time) > weather_forecast_delay){
-    Check_WIFI();
+      //Resets timer
+      watering_last_time = millis();
+    }
+    //++++++++++++++++++++++++++++++++++++
+    /*
+    //Refreshes the displayed mode
+    if((millis() - mode_last_time) > mode_delay){
+      Print_MODE();
       
-    Get_Day_Forecast(rain_probability, daily_will_it_rain);
-
-    //Resets timer
-    weather_forecast_last_time = millis();
+      //Resets timer
+      mode_last_time = millis();
+    }
+    */
+    //++++++++++++++++++++++++++++++++++++
+    //Monitors alarm
+    if((millis() - alarm_last_time) > alarm_delay){
+      Monitor_ALM();
+      
+      //Resets timer
+      alarm_last_time = millis();
+    }
+    //++++++++++++++++++++++++++++++++++++
   }
-  //++++++++++++++++++++++++++++++++++++
-  if((millis() - watering_last_time) > watering_delay){
-    //decide_outdoor_watering_duration(sm_values, sm_array_size);
-
-    //Resets timer
-    watering_last_time = millis();
+  else{
+    //Sets the start time of when the pump was activated
+    if(pump_checked == false)
+    {
+      pump_last_time = millis();
+      pump_checked = true;
+    }
+    //Limits the pump so it can only stay on for a certain period of time continuously
+    if((millis() - pump_last_time) > max_pump_time){
+      Change_PUMP(0);
+    }
   }
-  //++++++++++++++++++++++++++++++++++++
-  //Refreshes the displayed mode and checks for alarms
-  if((millis() - mode_last_time) > mode_delay){
-    Print_MODE();
-    
-    //Resets timer
-    mode_last_time = millis();
-  }
-
-  Monitor_ALM();
 }
 //-----------------------------------------------------------------------------------------------------
 void Serial_New_Line(){
@@ -305,19 +340,21 @@ void Serial_New_Line(){
 //-----------------------------------------------------------------------------------------------------
 void Init_DHT(){
   //Checks how many dht sensors are in the dht array
-  Serial.print("Amount of dht sensors: ");
+  //Serial.print("Amount of dht sensors: ");
   dht_array_size = sizeof(dht_array)/sizeof(DHT);
-  Serial.print(dht_array_size);
+  //Serial.print(dht_array_size);
 
   //Initializes all dht sensors in the dht array
   for(int i = 0; i < dht_array_size; i++)
   {
     //pinMode(dht_array[i], INPUT);
     dht_array[i].begin();
+    /*
     Serial.print("\n");
     Serial.print("DHT sensor ");
     Serial.print(i + 1);
     Serial.print(" initialized successfully!");
+    */  
   }
 }
 //-----------------------------------------------------------------------------------------------------
@@ -349,16 +386,18 @@ void Read_DHT(){
       adjusted_dht_array_size--;
     }
 
-    Serial.print(i + 1);
-    Serial.print(", ");
-    Serial.print("Humidity: ");
-    Serial.print(h);
-    Serial.print(" %");
-    Serial.print(", ");
-    Serial.print("Temperature: ");
-    Serial.print(t);
-    Serial.print(" °C");
-    Serial.print("\n");
+    if(adjusted_dht_array_size > 1){
+      Serial.print(i + 1);
+      Serial.print(", ");
+      Serial.print("Humidity: ");
+      Serial.print(h);
+      Serial.print(" %");
+      Serial.print(", ");
+      Serial.print("Temperature: ");
+      Serial.print(t);
+      Serial.print(" °C ||| ");
+      //Serial.print("\n");
+    }
   }
   
   //Calculates average values of the read sensor data (of one cycle)
@@ -397,9 +436,9 @@ void Read_DHT(){
 //-----------------------------------------------------------------------------------------------------
 void Init_SM(){
   //Checks how many soil moisture sensors are in the sm array
-  Serial.print("Amount of soil moisture sensors: ");
+  //Serial.print("Amount of soil moisture sensors: ");
   sm_array_size = sizeof(sm_array)/sizeof(int);
-  Serial.print(sm_array_size);
+  //Serial.print(sm_array_size);
 
   for(int i = 0; i < sm_array_size; i++)
   {
@@ -435,12 +474,14 @@ void Read_SM(){
       adjusted_sm_array_size--;
     }
     
-    Serial.print(i + 1);
-    Serial.print(", ");
-    Serial.print("Soil moisture: ");
-    Serial.print(sm);
-    Serial.print(" %");
-    Serial.print("\n");
+    if(adjusted_sm_array_size > 1){
+      Serial.print(i + 1);
+      Serial.print(", ");
+      Serial.print("Soil moisture: ");
+      Serial.print(sm);
+      Serial.print(" % ||| ");
+      //Serial.print("\n");
+    }
   }
 
   //Calculates average values of the read sensor data (of one cycle)
@@ -573,22 +614,28 @@ void Print_MODE(){
   int x = 14;
   int y = 1;
 
+  Serial.print("Current mode: ");
+
   switch(current_mode){
     case outdoor:
       Write_LCD(x, y, "OD");
+      Serial.print("Outdoor");
     break;
     case indoor:
       Write_LCD(x, y, "ID");
+      Serial.print("Indoor");
     break;
     case manual:
       Write_LCD(x, y, "MN");
+      Serial.print("Manual");
     break;
   }
+
 }
 //-----------------------------------------------------------------------------------------------------
 void Init_ALM(){
   pinMode(ALM_PIN, OUTPUT);
-  Print_ALM();
+  //Print_ALM();
 }
 //-----------------------------------------------------------------------------------------------------
 void Change_ALM(bool set){
@@ -642,22 +689,22 @@ void Monitor_ALM(){
     Change_ALM(1);
   }
 
-  Print_ALM();
+  //Print_ALM();
 }
 //-----------------------------------------------------------------------------------------------------
 void Print_ALM(){
   int x = 12;
-  if(alarm_mute == false){Write_LCD(x, 0, "A");}
-  else{Write_LCD(x, 0, "a");}
+  if(alarm_mute == false){Write_LCD(x, 0, "A"); Serial.print("A");}
+  else{Write_LCD(x, 0, "a"); Serial.print("a");}
   x++;
-  if(alarm_t == true){Write_LCD(x, 0, "T");}
-  else{Write_LCD(x, 0, "t");}
+  if(alarm_t == true){Write_LCD(x, 0, "T"); Serial.print("T");}
+  else{Write_LCD(x, 0, "t"); Serial.print("t");}
   x++;
-  if(alarm_w == true){Write_LCD(x, 0, "W");}
-  else{Write_LCD(x, 0, "w");}
+  if(alarm_w == true){Write_LCD(x, 0, "W"); Serial.print("W");}
+  else{Write_LCD(x, 0, "w"); Serial.print("w");}
   x++;
-  if(alarm_s == true){Write_LCD(x, 0, "S");}
-  else{Write_LCD(x, 0, "s");}
+  if(alarm_s == true){Write_LCD(x, 0, "S"); Serial.print("S");}
+  else{Write_LCD(x, 0, "s"); Serial.print("s");}
 }
 //-----------------------------------------------------------------------------------------------------
 void Init_WL(){
@@ -699,12 +746,14 @@ void Init_PUMP(){
 //-----------------------------------------------------------------------------------------------------
 void Change_PUMP(bool set){
   digitalWrite(PUMP_PIN, set);
-  Serial_New_Line();
+  //Serial_New_Line();
   if(set == true){
-    Serial.print("Pump started!");
+    //Serial.print("Pump started!");
   }
   else{
-    Serial.print("Pump stopped!");
+    //Serial.print("Pump stopped!");
+    Init_DHT();
+    delay(500);
   }
 }
 //-----------------------------------------------------------------------------------------------------
@@ -725,8 +774,6 @@ void Init_WIFI(){
       Serial.print("WiFi connection was established successfully!");
       Write_LCD(0, 0, "                ");
       Write_LCD(0, 0, "WiFi connected!");
-      delay(2500);
-      Write_LCD(0, 0, "                ");
       break;
     }
     if(millis() - start_time > timeout){
@@ -736,11 +783,12 @@ void Init_WIFI(){
       Serial.print("WiFi connection was not established!");
       Write_LCD(0, 0, "                ");
       Write_LCD(0, 0, "WiFi failed!");
-      delay(2500);
-      Write_LCD(0, 0, "                ");
       break;
     }
   }
+
+  delay(2500);
+  Write_LCD(0, 0, "                ");
 }
 //-----------------------------------------------------------------------------------------------------
 bool Check_WIFI(){
@@ -759,13 +807,102 @@ bool Check_WIFI(){
 ///*
 
 //-----------------------------------------------------------------------------------------------------
+//Function to handle/manage  watering based on the selected model
+void Handle_Watering() {
+  Serial_New_Line();
+  /*
+  bool below_threshold = Check_Sensor_Values(sm_values, sm_array_size);
+  
+  switch (current_mode) {
+    case outdoor:
+      if (below_threshold) {
+        int watering_duration = Decide_Outdoor_Watering_Duration(sm_values, sm_array_size);
+        Handle_Watering_Process(watering_duration);
+      } else {
+        Serial.println("Sufficient soil moisture in outdoor mode");
+        //delay(3600000);  // Delay for remaining time of 1 hour (1 hr - 1 min)
+      }
+      break;
+
+    case indoor:
+      if (below_threshold) {
+        int watering_duration = Decide_Indoor_Watering_Duration(sm_values, sm_array_size);
+        Handle_Watering_Process(watering_duration);
+      } else {
+        Serial.println("Sufficient soil moisture in indoor mode");
+        //delay(3600000);  // Delay for remaining time of 1 hour (1 hr - 1 min)
+      }
+      break;
+
+    case manual:
+      //  manual control.
+      // Manual mode: Control irrigation based on button state
+      // No need to control pump here, as it is handled by the interrupt
+      Serial.println("Manual mode");
+      //delay(1000);
+
+      break;
+    default:
+      // Handle unsupported  model
+      Serial.println("Invalid mode");
+      //delay(1000);
+      return;
+  }
+  */
+}
+//-----------------------------------------------------------------------------------------------------
+bool Check_Sensor_Values(float* sm_values, int sm_array_size) {
+  bool below_threshold = true;
+  float max_sensor_value = sm_values[0];
+  float min_sensor_value = sm_values[0];
+
+  // Check if all sensor values are below the threshold
+  for (int i = 0; i < sm_array_size; i++) {
+    if (sm_values[i] >= threshold) {
+      below_threshold = false;
+      break;
+    }
+
+    // Update max and min sensor values
+    if (sm_values[i] > max_sensor_value) {
+      max_sensor_value = sm_values[i];
+    }
+    if (sm_values[i] < min_sensor_value) {
+      min_sensor_value = sm_values[i];
+    }
+  }
+
+  
+  // Debug print statements
+  //Serial.print("Max sensor value: ");
+  //Serial.println(maxSensorValue);
+  //Serial.print("Min sensor value: ");
+  //Serial.println(minSensorValue);
+  
+
+  // Check if the discrepancy between sensors is greater than the discrepancy threshold
+  if (max_sensor_value - min_sensor_value > discrepancy_threshold) {
+    below_threshold = false;
+    // Display sensor values and ask for sensor check
+    for (int i = 0; i < sm_array_size; i++) {
+      Serial.print("SM Sensor ");
+      Serial.print(i + 1);
+      Serial.print(" value: ");
+      Serial.println(sm_values[i]);
+    }
+    Serial.println("Please check the sensors.");
+  }
+
+  return below_threshold;
+}
+//-----------------------------------------------------------------------------------------------------
 // Decide watering duration based on sensor data
-int decide_indoor_watering_duration(float* sm_values, int sm_array_size) {
+int Decide_Indoor_Watering_Duration(float* sm_values, int sm_array_size) {
   int watering_duration = 0;  // Default duration is 0 (no watering needed)
 
-  bool belowThreshold = check_sensor_values(sm_values, sm_array_size);
+  bool below_threshold = Check_Sensor_Values(sm_values, sm_array_size);
 
-  if (belowThreshold) {
+  if (below_threshold) {
     if (average_h < 60 && average_t > 24 && average_t < 30) {
       watering_duration = 8000;  // 8 seconds
     } else if (average_h < 60 && average_t > 30) {
@@ -779,19 +916,19 @@ int decide_indoor_watering_duration(float* sm_values, int sm_array_size) {
 }
 //-----------------------------------------------------------------------------------------------------
 //Decide watering duration based on sensor data and weather forecast
-int decide_outdoor_watering_duration(float* sm_values, int sm_array_size) {
+int Decide_Outdoor_Watering_Duration(float* sm_values, int sm_array_size) {
   int watering_duration = 0;  // Default duration is 0 (no watering needed)
 
-  bool belowThreshold = check_sensor_values(sm_values, sm_array_size);
+  bool below_threshold = Check_Sensor_Values(sm_values, sm_array_size);
 
 
-  if (belowThreshold) {
+  if (below_threshold) {
     if (sm_values[0] < 10) {
       watering_duration = 10000;  // Water for 10 seconds
     } else if (daily_will_it_rain && rain_probability < 50) {
-      watering_duration = decide_indoor_watering_duration(sm_values, sm_array_size) / 2;
+      watering_duration = Decide_Indoor_Watering_Duration(sm_values, sm_array_size) / 2;
     } else if (!daily_will_it_rain) {
-      watering_duration = decide_indoor_watering_duration(sm_values, sm_array_size);
+      watering_duration = Decide_Indoor_Watering_Duration(sm_values, sm_array_size);
     } else {
       // Wait for 3 hours before checking again
       watering_duration = -1;
@@ -802,106 +939,24 @@ int decide_outdoor_watering_duration(float* sm_values, int sm_array_size) {
   return watering_duration;
 }
 //-----------------------------------------------------------------------------------------------------
-//Function to handle/manage  watering based on the selected model
-void handle_watering() {
-  Serial_New_Line();
-  bool belowThreshold = check_sensor_values(sm_values, sm_array_size);
-  switch (current_mode) {
-    case outdoor:
-      if (belowThreshold) {
-        int watering_duration = decide_outdoor_watering_duration(sm_values, sm_array_size);
-        handle_watering_process(watering_duration);
-      } else {
-        Serial.println("Sufficient soil moisture in outdoor mode");
-        delay(3600000);  // Delay for remaining time of 1 hour (1 hr - 1 min)
-      }
-      break;
-
-    case indoor:
-      if (belowThreshold) {
-        int watering_duration = decide_indoor_watering_duration(sm_values, sm_array_size);
-        handle_watering_process(watering_duration);
-      } else {
-        Serial.println("Sufficient soil moisture in indoor mode");
-        delay(3600000);  // Delay for remaining time of 1 hour (1 hr - 1 min)
-      }
-      break;
-
-    case manual:
-      //  manual control.
-      // Manual mode: Control irrigation based on button state
-      // No need to control pump here, as it is handled by the interrupt
-      Serial.println("Manual model");
-      delay(1000);
-
-      break;
-    default:
-      // Handle unsupported  model
-      Serial.println("Invalid model");
-      delay(1000);
-      return;
-  }
-}
-//-----------------------------------------------------------------------------------------------------
-void handle_watering_process(int watering_duration) {
+void Handle_Watering_Process(int watering_duration) {
   if (watering_duration > 0) {
-    Change_PUMP(1);
     Serial.print("Watering ");
-    Serial.println(current_mode);
+    Serial.print(current_mode);
     Serial.print(" mode for: ");
-    Serial.println(watering_duration);
+    Serial.print(watering_duration);
+    float adjusted_watering_duration = watering_duration/max_pump_time;
+    for(int i = 0; i < watering_duration; i+=adjusted_watering_duration){
+      Change_PUMP(1);
+      delay(adjusted_watering_duration);
+      Change_PUMP(0);
+      delay(500);
+    }
     delay(watering_duration);
-    Change_PUMP(0);
-    delay(5000);
   } else {
-    Serial.println("Sufficient soil moisture");
-    delay(60000);  // 1 minute delay
+    Serial.print("Sufficient soil moisture");
+    //delay(60000);  // 1 minute delay
   }
-}
-//-----------------------------------------------------------------------------------------------------
-bool check_sensor_values(float* sm_values, int sm_array_size) {
-  bool belowThreshold = true;
-  float maxSensorValue = sm_values[0];
-  float minSensorValue = sm_values[0];
-
-  // Check if all sensor values are below the threshold
-  for (int i = 0; i < sm_array_size; i++) {
-    if (sm_values[i] >= threshold) {
-      belowThreshold = false;
-      break;
-    }
-
-    // Update max and min sensor values
-    if (sm_values[i] > maxSensorValue) {
-      maxSensorValue = sm_values[i];
-    }
-    if (sm_values[i] < minSensorValue) {
-      minSensorValue = sm_values[i];
-    }
-  }
-
-  
-  // Debug print statements
-  //Serial.print("Max sensor value: ");
-  //Serial.println(maxSensorValue);
-  //Serial.print("Min sensor value: ");
-  //Serial.println(minSensorValue);
-  
-
-  // Check if the discrepancy between sensors is greater than the discrepancy threshold
-  if (maxSensorValue - minSensorValue > discrepancy_threshold) {
-    belowThreshold = false;
-    // Display sensor values and ask for sensor check
-    for (int i = 0; i < sm_array_size; i++) {
-      Serial.print("SM Sensor ");
-      Serial.print(i + 1);
-      Serial.print(" value: ");
-      Serial.println(sm_values[i]);
-    }
-    Serial.println("Please check the sensors.");
-  }
-
-  return belowThreshold;
 }
 //-----------------------------------------------------------------------------------------------------
 
@@ -965,22 +1020,25 @@ void Get_Day_Forecast(float& rain_probability, bool& daily_will_it_rain) {
     Serial.print("\n");
     Serial.print("HTTP Response code: ");
     Serial.print(http_response_code);
-    Serial.print("\n");
+    //Serial.print("\n");
     
     if (http_response_code > 200) {
+      Serial.print("\n");
       Serial.print("Service unavailable!");
       http.end();
       return;
     }
     else if (http_response_code > 0) {
       json_data = http.getString();
-      Serial.print(json_data);
+      //Serial.print(json_data);
+      //Serial.print("\n");
       error = deserializeJson(doc, json_data);
 
-      Serial.print("\n");
+      /*
       Serial.print(F("deserializeJson() return code: "));
       Serial.print("\n");
       Serial.print(error.c_str());
+      */
 
       rain_probability = Extract_Rain_Probability(doc);
       temperature = doc["current"]["temp_c"];
@@ -990,6 +1048,7 @@ void Get_Day_Forecast(float& rain_probability, bool& daily_will_it_rain) {
     }
   } 
   else {
+    Serial.print("\n");
     Serial.print("Not connected to WiFi, thus the weather forecast could not be accessed!");
   }
 
