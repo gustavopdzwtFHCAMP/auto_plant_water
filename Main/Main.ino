@@ -47,7 +47,7 @@ enum SMState {
 //++++++++++++++++++++++++++++++++++++
 //make sure your WiFi is 2.4 GHz
 const char* wifi_ssid = "";  // Enter SSID here
-const char* wifi_password = "";    //Enter Password here
+const char* wifi_password = "12345678";    //Enter Password here
 const String location = "Vienna";            //Enter your City Name from api.weathermap.org
 
 const String apiKey = "a1c734b2aaa54624a1b93405230206";  // API key for weather data
@@ -94,11 +94,15 @@ bool alarm_s = 0;
 //LCD I2C
 #include <Wire.h>
 #include <LiquidCrystal_I2C.h>
-//Sets the LCD number of columns and rows
-int lcdColumns = 16;
-int lcdRows = 2;
+//Sets the LCD number of columns and rows based on type you have
+/*int lcdColumns = 16;
+//int lcdRows = 2;
 //Sets LCD address, number of columns and rows
-LiquidCrystal_I2C lcd(0x3F, lcdColumns, lcdRows);
+//LiquidCrystal_I2C lcd(0x3F, lcdColumns, lcdRows);*/
+int lcdColumns = 20;
+int lcdRows = 4;
+//Sets LCD address, number of columns and rows
+LiquidCrystal_I2C lcd(0x27, lcdColumns, lcdRows);
 //++++++++++++++++++++++++++++++++++++
 //Mode variables
 enum Mode { outdoor,
@@ -181,13 +185,8 @@ void onPress_Action_BTN1() {
   Serial_NewLine();
   Serial.print("Button 1 pressed");
   if (current_mode == manual) {  // Check if the current mode is manual
-    if (waterStatus == "<25") {  // Check if water level is low
-      Serial.println("\n Water level is low. Cannot start watering.");
-      return;
-    }
-    Change_PUMP(1);  
-  }
-  else {
+    Change_PUMP(1);
+  } else {
     Serial.println("\n Invalid mode, current mode is not manual.");
   }
 }
@@ -197,7 +196,7 @@ void onRelease_Action_BTN1() {
   Serial_NewLine();
   Serial.print("Button 1 released");
   if (current_mode == manual) {  // Check if the current mode is manual
-    Change_PUMP(0);             
+    Change_PUMP(0);
   }
 }
 
@@ -230,7 +229,7 @@ void onRelease_Action_BTN1() {
 }
 */
 
- // Callback function for button alarm stop
+// Callback function for button alarm stop
 void Action_BTN3() {
   Serial_NewLine();
   Serial.print("Button 3 pressed");
@@ -261,7 +260,17 @@ void setup() {
 
   Init_LCD();
 
-  //ooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo
+  Init_PUMP();
+  // Init_BTN();
+
+  // Initialize the components required for non-manual mode
+ // if (current_mode == indoor || current_mode == outdoor) {
+    initializeNonManualMode();
+ // }
+}
+
+//-----------------------------------------------------------------------------------------------------
+void initializeNonManualMode() {
 
   Init_WIFI();
   if (Check_WIFI() == true) {
@@ -276,7 +285,7 @@ void setup() {
 
     GetDayForcast(rainProbability, dailyWillItRain);
   }
-  //ooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo
+
 
   Serial_NewLine();
   Init_DHT();
@@ -285,22 +294,12 @@ void setup() {
 
   Init_ALM();
   Init_WL();
-  Init_PUMP();
-  // Init_BTN();
+  //Sets the sensor timer accordingly so the sensors measure right away with system start
+  sensor_last_time = -(sensor_delay + 1);
 
   GetTimeData = 0;
   GetWeatherData = 0;
   WaitPeriod = 0;
-
- // current_mode = outdoor;
-
- /* // Check the mode and trigger watering if necessary
-  if (current_mode == indoor || current_mode == outdoor) {
-    handleWatering();
-  }
-*/
-  //Sets the sensor timer accordingly so the sensors measure right away with system start
-  sensor_last_time = -(sensor_delay + 1);
 }
 //-----------------------------------------------------------------------------------------------------
 void loop() {
@@ -312,6 +311,18 @@ void loop() {
   btn2.tick();
   btn3.tick();
 
+
+  if (current_mode == indoor || current_mode == outdoor) {
+    //initializeNonManualMode();
+    processNonManualMode();
+  }
+  //Refreshes the displayed mode and checks for alarms
+  if ((millis() - mode_last_time) > mode_delay) {
+    Print_MODE();
+  }
+}
+
+void processNonManualMode() {
   // update the time every day, once we have internet time we'll use millis() to keep it updated
   if (GetTimeData > 86400) {  // 86400 reset the time every day
     GetTimeData = 0;
@@ -356,16 +367,12 @@ void loop() {
     WaitPeriod = 0;
   }
   //++++++++++++++++++++++++++++++++++++
-  //Refreshes the displayed mode and checks for alarms
-  if ((millis() - mode_last_time) > mode_delay) {
-    Print_MODE();
 
-    //Resets timer
-    mode_last_time = millis();
-  }
-
-  Monitor_ALM();
+Monitor_ALM();
 }
+
+
+
 //-----------------------------------------------------------------------------------------------------
 void Serial_NewLine() {
   Serial.print("\n");
@@ -662,7 +669,7 @@ void Monitor_ALM() {
     alarm_w = 0;
   }
 
-  if (average_sm > 90 || average_sm < 20) {
+  if (average_sm > 90 || average_sm < 10) {
     alarm_s = 1;
   } else {
     alarm_s = 0;
@@ -899,7 +906,7 @@ int decide_indoor_watering_duration(float* sm_array_values, int sm_array_size) {
 //--------------------------------------------------------------------------------------------------
 // Decide watering duration based on sensor data and weather forecast
 int decide_outdoor_watering_duration(float* sm_array_values, int sm_array_size) {
- // Serial_NewLine();
+  // Serial_NewLine();
   int watering_duration = 0;  // Default duration is 0 (no watering needed)
 
   SMState sensorState = checkSensorValues(sm_array_values, sm_array_size);
@@ -911,7 +918,7 @@ int decide_outdoor_watering_duration(float* sm_array_values, int sm_array_size) 
   }
 
   if (sensorState == belowThreshold) {
-    if (average_sm < 21) {
+    if (average_sm <15) {
       watering_duration = 10;  // Water for 10 seconds
     } else if (dailyWillItRain && rainProbability < 50) {
       watering_duration = decide_indoor_watering_duration(sm_array_values, sm_array_size) / 2;
@@ -926,7 +933,7 @@ int decide_outdoor_watering_duration(float* sm_array_values, int sm_array_size) 
 }
 // Function to handle/manage  watering based on the selected model
 void handleWatering() {
- // Serial_NewLine();
+  // Serial_NewLine();
   SMState sensorState = checkSensorValues(sm_array_values, sm_array_size);
 
   switch (current_mode) {
@@ -967,7 +974,7 @@ void handleWateringProcess(int watering_duration, Mode current_mode) {
 
   //Helps prevent damage to the pump when water level is low.
   // Check water level is low if waterStatus is "<25" exit the function
-  if (waterStatus == "<25") {
+  if (waterStatus != "<25") {
     Serial.println("Water level is low. Cannot start watering.");
     return;
   }
@@ -991,7 +998,6 @@ void handleWateringProcess(int watering_duration, Mode current_mode) {
     // Continue watering until the specified duration is reached
     // This section of the code will keep looping until the current time (obtained by millis()) is less than the endTime.
     // It ensures that the watering process continues for the specified duration.
-    
   }
 
   Change_PUMP(0);
