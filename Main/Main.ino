@@ -28,10 +28,8 @@ int sm_array[] = { SM1_PIN, SM2_PIN };
 float sm_array_values[2] = { 0 };
 int sm_array_size;
 float average_sm = 0;
-
 float threshold = 35.0;               // SM change  threshold
 float discrepancy_threshold = 10.00;  //sm diff value
-
 enum SMState {
   belowThreshold,
   aboveThreshold,
@@ -43,13 +41,11 @@ enum SMState {
 #include <ArduinoJson.h>
 #include "time.h"           //internet time
 #include "elapsedMillis.h"  // repeat a task at regular intervals by checking if enough time has elapsed since the task
-
 //++++++++++++++++++++++++++++++++++++
 //make sure your WiFi is 2.4 GHz
-const char* wifi_ssid = "";  // Enter SSID here
+const char* wifi_ssid = "Mkunde";  // Enter SSID here
 const char* wifi_password = "12345678";    //Enter Password here
 const String location = "Vienna";            //Enter your City Name from api.weathermap.org
-
 const String apiKey = "a1c734b2aaa54624a1b93405230206";  // API key for weather data
 //++++++++++++++++++++++++++++++++++++
 //time
@@ -59,7 +55,6 @@ const String apiKey = "a1c734b2aaa54624a1b93405230206";  // API key for weather 
 const long gmtOffset_sec = 3600 * GMT_OFFSET;
 const int daylightOffset_sec = 3600 * 0;
 byte Hour, Minute, Second;
-
 //++++++++++++++++++++++++++++++++++++
 // time for weather data
 struct tm timeinfo;
@@ -78,7 +73,6 @@ bool dailyWillItRain;       // will it rain today?
 float api_humidity = 0;
 float api_temperature = 0;
 int watering_duration = 0;
-
 //++++++++++++++++++++++++++++++++++++
 //The interval in which the sensors should be read and displayed
 unsigned long sensor_delay = 10000;
@@ -118,23 +112,10 @@ unsigned long mode_last_time = 0;
 #define BTN2_PIN 14
 #define BTN3_PIN 27
 #include <OneButton.h>
-
 // Create a button object with pin (5,14 and 27) and active high logic
 OneButton btn1(BTN1_PIN, false);
 OneButton btn2(BTN2_PIN, false);
 OneButton btn3(BTN3_PIN, false);
-//For the buttons it does not make sense to create an array, as each button has to
-//have a separate isr assigned, as isr's dont take parameters
-//Debounce times
-//unsigned long btn1_debounce_delay = 50;
-//unsigned long btn2_debounce_delay = 250;
-//unsigned long btn3_debounce_delay = 250;
-//For every button added, the following variables and functions (isr) have to be declared (dependent on type of interrupt):
-
-//bool btn1_pressed = false;
-//unsigned long btn1_last_debounce_time = 0;  //The last time the output pin was toggled
-//unsigned long btn2_last_debounce_time = 0;  //The last time the output pin was toggled
-//unsigned long btn3_last_debounce_time = 0;  //The last time the output pin was toggled
 //++++++++++++++++++++++++++++++++++++
 //Defines water level pin
 #define UPPER_WL_PIN 18
@@ -145,41 +126,6 @@ String waterStatus = "";
 //++++++++++++++++++++++++++++++++++++
 //-----------------------------------------------------------------------------------------------------
 //++++++++++++++++++++++++++++++++++++
-//Adding more functions to the interrupts may result in a guru meditation error,
-//as an ISR utilizes the processor fully
-//This means that the processor wants to access certain ressources that are not free yet
-//So after adding a function to the ISR, immediately test out your changes on the microcontroller
-//to see if anything breaks
-/*void IRAM_ATTR Action_BTN1() {
-  if ((millis() - btn1_last_debounce_time) > btn1_debounce_delay) {
-    if (current_mode == manual) {
-      if (btn1_pressed == false) {
-        if (digitalRead(BTN1_PIN) == HIGH) {
-          btn1_pressed = true;
-          Serial_NewLine();
-          Serial.print("Button 1 pressed");
-          // if (current_mode == manual) {  // Check if the current mode is manual
-            if (waterStatus != "<25") {
-            Serial.println("Water level is low. Cannot start watering.");
-            return;
-          }
-          Change_PUMP(1);
-          //  }
-        }
-      } else if (btn1_pressed == true) {
-        if (digitalRead(BTN1_PIN) == LOW) {
-          btn1_pressed = false;
-          Serial_NewLine();
-          Serial.print("Button 1 released");
-          //  if (current_mode == manual) {
-          Change_PUMP(0);
-        }
-      }
-    }
-    btn1_last_debounce_time = millis();
-  }
-}
-*/
 // Callback function for button press event for manual watering
 void onPress_Action_BTN1() {
   Serial_NewLine();
@@ -190,7 +136,7 @@ void onPress_Action_BTN1() {
     Serial.println("\n Invalid mode, current mode is not manual.");
   }
 }
-
+//++++++++++++++++++++++++++++++++++++
 // Callback function for button release eventfor manual watering
 void onRelease_Action_BTN1() {
   Serial_NewLine();
@@ -199,76 +145,42 @@ void onRelease_Action_BTN1() {
     Change_PUMP(0);
   }
 }
-
 //++++++++++++++++++++++++++++++++++++
-
-/*void IRAM_ATTR Action_BTN2() {
-  if ((millis() - btn2_last_debounce_time) > btn2_debounce_delay) {
-    if (digitalRead(BTN2_PIN) == HIGH) {
-      Serial_NewLine();
-      //Serial.print("\n");
-      Serial.print("Button 2 pressed");
-      Change_MODE();
-    }
-    btn2_last_debounce_time = millis();
-  }
-}
-*/
-//++++++++++++++++++++++++++++++++++++
-/*void IRAM_ATTR Action_BTN3() {
-  if ((millis() - btn3_last_debounce_time) > btn3_debounce_delay) {
-    if (digitalRead(BTN3_PIN) == HIGH) {
-      Serial_NewLine();
-      //Serial.print("\n");
-      Serial.print("Button 3 pressed");
-      //Change_ALM(0);
-      alarm_mute = !alarm_mute;
-    }
-    btn3_last_debounce_time = millis();
-  }
-}
-*/
-
 // Callback function for button alarm stop
 void Action_BTN3() {
   Serial_NewLine();
   Serial.print("Button 3 pressed");
   // Toggle the alarm mute flag
-  alarm_mute = !alarm_mute;
+  if(current_mode != manual){
+    alarm_mute = !alarm_mute;
+  }
 }
 //+++++++++++++++++++++++++++++++++++++
 //-----------------------------------------------------------------------------------------------------
 void setup() {
   //Mostly needed when trying to find the address of the lcd display
   //Wire.begin();
-
   //Sets baud rate
   Serial.begin(115200);
-
   // Initialize the button with debounce time in ms
   //sensitivity of the button on press
   btn1.setDebounceTicks(100);
   btn2.setDebounceTicks(50);
   btn3.setDebounceTicks(50);
-
   // Attach callback functions for button longpress and release events
   btn1.attachLongPressStart(onPress_Action_BTN1);
   btn1.attachLongPressStop(onRelease_Action_BTN1);
   // Attach a callback function for the button press event
   btn2.attachClick(Change_MODE);
   btn3.attachClick(Action_BTN3);
-
   Init_LCD();
-
   Init_PUMP();
   // Init_BTN();
-
   // Initialize the components required for non-manual mode
- // if (current_mode == indoor || current_mode == outdoor) {
-    initializeNonManualMode();
- // }
+  // if (current_mode == indoor || current_mode == outdoor) {
+  initializeNonManualMode();
+  // }
 }
-
 //-----------------------------------------------------------------------------------------------------
 void initializeNonManualMode() {
 
@@ -285,7 +197,6 @@ void initializeNonManualMode() {
 
     GetDayForcast(rainProbability, dailyWillItRain);
   }
-
 
   Serial_NewLine();
   Init_DHT();
@@ -311,17 +222,16 @@ void loop() {
   btn2.tick();
   btn3.tick();
 
-
   if (current_mode == indoor || current_mode == outdoor) {
     //initializeNonManualMode();
     processNonManualMode();
   }
   //Refreshes the displayed mode and checks for alarms
   if ((millis() - mode_last_time) > mode_delay) {
-    Print_MODE();
+    //Print_MODE();
   }
 }
-
+//-----------------------------------------------------------------------------------------------------
 void processNonManualMode() {
   // update the time every day, once we have internet time we'll use millis() to keep it updated
   if (GetTimeData > 86400) {  // 86400 reset the time every day
@@ -332,22 +242,18 @@ void processNonManualMode() {
 
   //Reads and displays sensor data
   if ((millis() - sensor_last_time) > sensor_delay) {
-    Serial.print("\n");
-    Serial.print("+---------------------------------------------------------------------------------+");
-    Serial.print("\n");
-
     printLocalTime();
-
-    Serial_NewLine();
+    //Serial.print("\n");
     Read_DHT(average_h, average_t);
-
-    Serial_NewLine();
+    Serial.print("\n");
     Read_SM(sm_array_size, average_sm);
-
-    Serial_NewLine();
+    Serial.print("\n");
     Read_WL();
-
-    Serial_NewLine();
+    Serial.print("\n");
+    Print_ALM();
+    Serial.print("\n");
+    Print_MODE();
+    
     Read_Weather();
 
     //Resets timer
@@ -362,17 +268,14 @@ void processNonManualMode() {
   }
   //++++++++++++++++++++++++++++++++++++
   //Check if 1 minutes have passed
-  if (WaitPeriod > 60 * 1) {
+  if (WaitPeriod > 60 * 0.5) {
     handleWatering();
     WaitPeriod = 0;
   }
   //++++++++++++++++++++++++++++++++++++
 
-Monitor_ALM();
+  Monitor_ALM();
 }
-
-
-
 //-----------------------------------------------------------------------------------------------------
 void Serial_NewLine() {
   Serial.print("\n");
@@ -431,8 +334,7 @@ void Read_DHT(float& average_h, float& average_t) {
     Serial.print(", ");
     Serial.print("Temperature: ");
     Serial.print(t);
-    Serial.print(" °C");
-    Serial.print("\n");
+    Serial.print(" °C ||| ");
   }
 
   //Calculates average values of the read sensor data (of one cycle)
@@ -508,8 +410,8 @@ void Read_SM(int sm_array_size, float& average_sm) {
     Serial.print(", ");
     Serial.print("Soil moisture: ");
     Serial.print(sm);
-    Serial.print(" %");
-    Serial.print("\n");
+    Serial.print(" % ||| ");
+    //Serial.print("\n");
   }
 
   //Calculates average values of the read sensor data (of one cycle)
@@ -563,7 +465,6 @@ float Adjust_SM(float data) {
   //return ( 100 - ( ( data / 4095 ) * 100 ) );
 }
 //-----------------------------------------------------------------------------------------------------
-
 /*void Init_BTN() {
    attachInterrupt(BTN1_PIN, Action_BTN1, CHANGE);
   attachInterrupt(BTN2_PIN, Action_BTN2, RISING);
@@ -643,19 +544,22 @@ void Print_MODE() {
   switch (current_mode) {
     case outdoor:
       Write_LCD(x, y, "OD");
+      Serial.print("Outdoor");
       break;
     case indoor:
       Write_LCD(x, y, "ID");
+      Serial.print("Indoor");
       break;
     case manual:
       Write_LCD(x, y, "MN");
+      Serial.print("Manual");
       break;
   }
 }
 //-----------------------------------------------------------------------------------------------------
 void Init_ALM() {
   pinMode(ALM_PIN, OUTPUT);
-  Print_ALM();
+  //Print_ALM();
 }
 //-----------------------------------------------------------------------------------------------------
 void Change_ALM(bool set) {
@@ -707,34 +611,22 @@ void Monitor_ALM() {
     Change_ALM(1);
   }
 
-  Print_ALM();
+  //Print_ALM();
 }
 //-----------------------------------------------------------------------------------------------------
 void Print_ALM() {
   int x = 12;
-  if (alarm_mute == false) {
-    Write_LCD(x, 0, "A");
-  } else {
-    Write_LCD(x, 0, "a");
-  }
+  if(alarm_mute == false){Write_LCD(x, 0, "A"); Serial.print("A");}
+  else{Write_LCD(x, 0, "a"); Serial.print("a");}
   x++;
-  if (alarm_t == true) {
-    Write_LCD(x, 0, "T");
-  } else {
-    Write_LCD(x, 0, "t");
-  }
+  if(alarm_t == true){Write_LCD(x, 0, "T"); Serial.print("T");}
+  else{Write_LCD(x, 0, "t"); Serial.print("t");}
   x++;
-  if (alarm_w == true) {
-    Write_LCD(x, 0, "W");
-  } else {
-    Write_LCD(x, 0, "w");
-  }
+  if(alarm_w == true){Write_LCD(x, 0, "W"); Serial.print("W");}
+  else{Write_LCD(x, 0, "w"); Serial.print("w");}
   x++;
-  if (alarm_s == true) {
-    Write_LCD(x, 0, "S");
-  } else {
-    Write_LCD(x, 0, "s");
-  }
+  if(alarm_s == true){Write_LCD(x, 0, "S"); Serial.print("S");}
+  else{Write_LCD(x, 0, "s"); Serial.print("s");}
 }
 //-----------------------------------------------------------------------------------------------------
 void Init_WL() {
@@ -781,7 +673,6 @@ void Change_PUMP(bool set) {
     Serial.print("Pump stopped!");
   }
 }
-
 //-----------------------------------------------------------------------------------------------------
 void Init_WIFI() {
   WiFi.mode(WIFI_STA);
@@ -829,7 +720,6 @@ bool Check_WIFI() {
   }
 }
 //-----------------------------------------------------------------------------------------------------
-
 // To check if the soil moisture sensor value are below or above the threshold
 SMState checkSensorValues(float sm_array_values[], int sm_array_size) {
   Serial_NewLine();
@@ -868,16 +758,13 @@ SMState checkSensorValues(float sm_array_values[], int sm_array_size) {
 
   return state;
 }
-
 //-----------------------------------------------------------------------------------------------------
-
 // A helper function that prints an error message
 void handleError() {
   Serial.println("Error: Discrepancy too high. Please check the soil moisture sensor");
   return;
 }
 //-----------------------------------------------------------------------------------------------------
-
 // Decide watering duration based on sensor data
 int decide_indoor_watering_duration(float* sm_array_values, int sm_array_size) {
   //Serial_NewLine();
@@ -892,18 +779,17 @@ int decide_indoor_watering_duration(float* sm_array_values, int sm_array_size) {
 
   if (sensorState == belowThreshold) {
     if (average_h < 60 && average_t > 24 && average_t < 30) {
-      watering_duration = 8;  // 8 seconds
+      watering_duration = 2;  // 3 seconds
     } else if (average_h < 60 && average_t > 30) {
-      watering_duration = 10;  // 10 seconds
+      watering_duration = 3;  // 5 seconds
     } else {
-      watering_duration = 5;  // 5 seconds
+      watering_duration = 1;  // 1 second
     }
   }
 
   return watering_duration;
 }
-
-//--------------------------------------------------------------------------------------------------
+//-----------------------------------------------------------------------------------------------------
 // Decide watering duration based on sensor data and weather forecast
 int decide_outdoor_watering_duration(float* sm_array_values, int sm_array_size) {
   // Serial_NewLine();
@@ -919,7 +805,7 @@ int decide_outdoor_watering_duration(float* sm_array_values, int sm_array_size) 
 
   if (sensorState == belowThreshold) {
     if (average_sm <15) {
-      watering_duration = 10;  // Water for 10 seconds
+      watering_duration = 3;  // Water for 5 seconds
     } else if (dailyWillItRain && rainProbability < 50) {
       watering_duration = decide_indoor_watering_duration(sm_array_values, sm_array_size) / 2;
     } else if (!dailyWillItRain) {
@@ -965,7 +851,6 @@ void handleWatering() {
       return;
   }
 }
-
 //-----------------------------------------------------------------------------------------------------
 void handleWateringProcess(int watering_duration, Mode current_mode) {
   unsigned long startTime = millis();                            // Get the start time
@@ -1003,7 +888,6 @@ void handleWateringProcess(int watering_duration, Mode current_mode) {
   Change_PUMP(0);
   Serial.println("Watering completed");
 }
-
 //-----------------------------------------------------------------------------------------------------
 void GetInternetTime() {
   getLocalTime(&timeinfo);
@@ -1015,7 +899,6 @@ void GetInternetTime() {
   Minute = timeinfo.tm_min;
   Second = timeinfo.tm_sec;
 }
-
 //-----------------------------------------------------------------------------------------------------
 void printLocalTime() {
   Serial_NewLine();
@@ -1033,14 +916,12 @@ void printLocalTime() {
   strftime(buf, sizeof(buf), "Time: %H:%M:%S", &timeinfo);
   Serial.println(buf);
 }
-
 //-----------------------------------------------------------------------------------------------------
-
 void Read_Weather() {
   Serial.println();
   Serial.println("+---------------------------+");
   Serial.println("Weather data");
-  Serial.print("Chance of rain: ");
+  Serial.print("Chance of rain in the next six hours: ");
   Serial.print(rainProbability);
   Serial.println("%");
   Serial.print("Will it rain today?: ");
@@ -1075,6 +956,7 @@ void GetDayForcast(float& rainProbability, bool& dailyWillItRain) {
     http.begin(url.c_str());
     int httpResponseCode = http.GET();
 
+    Serial.print("\n");
     Serial.print("HTTP to get day data: ");
     Serial.println(url);
 
@@ -1088,7 +970,7 @@ void GetDayForcast(float& rainProbability, bool& dailyWillItRain) {
       Serial.print("HTTP Response code: ");
       Serial.println(httpResponseCode);
       JSONData = http.getString();
-      Serial.println(JSONData);
+      //Serial.println(JSONData);
       error = deserializeJson(doc, JSONData);
       Serial.print(F("deserializeJson() return code: "));
       Serial.println(error.c_str());
@@ -1105,7 +987,6 @@ void GetDayForcast(float& rainProbability, bool& dailyWillItRain) {
   }
   Read_Weather();
 }
-
 //-----------------------------------------------------------------------------------------------------
 float extractRainProbability(JsonDocument& doc) {
   // Extract the rain probability from the forecast for the next 6 hrs
@@ -1128,7 +1009,6 @@ float extractRainProbability(JsonDocument& doc) {
 
   return rainHighestProbability;
 }
-
 //-----------------------------------------------------------------------------------------------------
 bool getDailyRain(JsonDocument& doc) {
   // // Check if it will rain today
@@ -1141,9 +1021,4 @@ bool getDailyRain(JsonDocument& doc) {
   }
   return false;
 }
-
-
-//-----------------------------------------------------------------------------------------------------
-
-
 //-----------------------------------------------------------------------------------------------------
