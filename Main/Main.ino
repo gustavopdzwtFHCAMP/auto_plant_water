@@ -43,10 +43,10 @@ enum SMState {
 #include "elapsedMillis.h"  // repeat a task at regular intervals by checking if enough time has elapsed since the task
 //++++++++++++++++++++++++++++++++++++
 //make sure your WiFi is 2.4 GHz
-const char* wifi_ssid = "Mkunde";  // Enter SSID here
-const char* wifi_password = "12345678";    //Enter Password here
-const String location = "Vienna";            //Enter your City Name from api.weathermap.org
-const String apiKey = "a1c734b2aaa54624a1b93405230206";  // API key for weather data
+const char* wifi_ssid = "";  // Enter SSID here
+const char* wifi_password = "";    //Enter Password here
+const String location = "";            //Enter your City Name from api.weathermap.org
+const String apiKey = "";  // API key for weather data
 //++++++++++++++++++++++++++++++++++++
 //time
 // enter your GMT Time offset
@@ -228,7 +228,7 @@ void loop() {
   }
   //Refreshes the displayed mode and checks for alarms
   if ((millis() - mode_last_time) > mode_delay) {
-    //Print_MODE();
+    Print_MODE();
   }
 }
 //-----------------------------------------------------------------------------------------------------
@@ -544,15 +544,17 @@ void Print_MODE() {
   switch (current_mode) {
     case outdoor:
       Write_LCD(x, y, "OD");
-      Serial.print("Outdoor");
+      //Serial.print("Outdoor");
       break;
     case indoor:
       Write_LCD(x, y, "ID");
-      Serial.print("Indoor");
+      //Serial.print("Indoor");
       break;
     case manual:
       Write_LCD(x, y, "MN");
-      Serial.print("Manual");
+      Write_LCD(0, 0, "                    ");
+      Write_LCD(0, 1, "           ");
+      //Serial.print("Manual");
       break;
   }
 }
@@ -664,13 +666,13 @@ void Init_PUMP() {
 }
 //-----------------------------------------------------------------------------------------------------
 void Change_PUMP(bool set) {
-
   digitalWrite(PUMP_PIN, set);
   Serial_NewLine();
   if (set) {
     Serial.print("Pump started!");
   } else {
     Serial.print("Pump stopped!");
+    //Init_DHT();
   }
 }
 //-----------------------------------------------------------------------------------------------------
@@ -680,6 +682,7 @@ void Init_WIFI() {
   WiFi.begin(wifi_ssid, wifi_password);
   Serial_NewLine();
   Serial.print("Connecting to WiFi...");
+  Serial.print("\n");
   Write_LCD(0, 0, "Connecting WiFi!");
 
   float start_time = millis();
@@ -687,7 +690,6 @@ void Init_WIFI() {
 
   while (1) {
     if (WiFi.status() == WL_CONNECTED) {
-      Serial_NewLine();
       Serial.print("WiFi connection was established successfully!");
       Write_LCD(0, 0, "                ");
       Write_LCD(0, 0, "WiFi connected!");
@@ -696,10 +698,7 @@ void Init_WIFI() {
       break;
     }
     if (millis() - start_time > timeout) {
-      Serial_NewLine();
-      Serial.print("Connection timeout!");
-      Serial.print("\n");
-      Serial.print("WiFi connection was not established!");
+      Serial.print("Connection timeout, WiFi connection was not established!");
       Write_LCD(0, 0, "                ");
       Write_LCD(0, 0, "WiFi failed!");
       delay(2500);
@@ -859,7 +858,7 @@ void handleWateringProcess(int watering_duration, Mode current_mode) {
 
   //Helps prevent damage to the pump when water level is low.
   // Check water level is low if waterStatus is "<25" exit the function
-  if (waterStatus != "<25") {
+  if (waterStatus == "<25") {
     Serial.println("Water level is low. Cannot start watering.");
     return;
   }
